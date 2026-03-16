@@ -96,7 +96,27 @@ If after two fix attempts the problem is unresolved:
 
 ## Error Log
 
-*(no errors logged yet)*
+### ERR-001 · org_members RLS recursion on live API access
+- **Date:** 2026-03-15
+- **Status:** Resolved
+- **Feature area:** Supabase schema / RLS (TASK-001)
+- **What was reported:** Profile and membership reads returned `42P17` with message `infinite recursion detected in policy for relation "org_members"`.
+- **Clarifying questions asked / answers received:** Verified against live signup + authenticated REST queries; recursion reproduced consistently.
+- **Root cause:** `org_members` policies referenced `org_members` in policy predicates, recursively re-triggering RLS evaluation.
+- **What was tried:** Added `security definer` helper functions (`is_org_member`, `is_org_admin`) and rewrote `org_members` policies to call those helpers instead of self-querying in policy SQL.
+- **Resolution:** Applied migration `supabase/migrations/20260316034647_task001_fix_org_members_rls_recursion.sql`, then verified successful signup/profile lookup and table access checks.
+- **Docs updated as result:** None (implementation-level migration fix only).
+
+### ERR-002 · TASK-004 cannot start (missing spec)
+- **Date:** 2026-03-15
+- **Status:** Blocked
+- **Feature area:** Task execution workflow
+- **What was reported:** TASK-004 depends on `specs/orgs_spec.md`, but that file does not exist in the repo.
+- **Clarifying questions asked / answers received:** None needed; file presence verified locally.
+- **Root cause:** Required spec file has not been authored yet.
+- **What was tried:** Checked `specs/` directory and task instructions; no fallback spec available.
+- **Resolution:** Blocked pending creation of `specs/orgs_spec.md`.
+- **Docs updated as result:** `docs/tasks.md` note updated to indicate block on TASK-004.
 
 Entry format:
 ```

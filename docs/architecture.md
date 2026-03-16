@@ -95,7 +95,7 @@ specs/
 
 > Updated as spec sheets are added.
 
-*(none yet — added as features are designed)*
+- `auth_spec.md` — email/password sign up, sign in, sign out, forgot password
 
 ---
 
@@ -124,11 +124,15 @@ lib/features/[feature]/
 
 ## What Still Needs Building
 
-- Phase 1: Foundation (auth, org/profile, core routing)
-- Phase 2: Transactions
-- Phase 3: Budget vs Actuals
-- Phase 4: Reports & Charts
-- Phase 5: Receipt Management
+- Phase 1: Foundation (auth, org/profile, core routing, app shell)
+- Phase 2: Transactions (categories, budget defaults, settings, transaction CRUD, list)
+- Phase 3: Dashboard & Monthly View (charts via `fl_chart`, budget vs actual)
+- Phase 4: Mileage Log & Business Summary
+- Phase 5: Receipt Management (Supabase Storage upload, download, link to transaction)
+
+## Additional Packages (to be added as phases progress)
+
+- `fl_chart: ^0.69.0` — added in TASK-011 (Dashboard charts)
 
 ---
 

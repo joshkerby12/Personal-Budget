@@ -6,98 +6,93 @@
 
 ## Phase 1 · Foundation ← CURRENT PHASE
 
-**What gets built:**
-- Supabase schema: `organizations`, `profiles`, `org_members`
-- RLS policies for all core tables
-- Auto-create-profile trigger on `auth.users`
-- Auth flow: sign up, sign in, sign out
-- Org creation and membership
-- Core routing with `RouterNotifier` redirect logic
-- Core theme, colors, text styles
+**What gets built:** TASK-001 through TASK-005
 
-**Prerequisites:** None — this is the starting point.
+- Supabase full schema (all tables, RLS, triggers)
+- Core app scaffold (theme, routing, dotenv, Supabase init)
+- Auth (sign up, sign in, sign out, forgot password)
+- Org onboarding (create org, become owner)
+- App shell + responsive navigation (mobile bottom nav, desktop tab nav)
 
 **Acceptance criteria:**
-- [ ] User can sign up and a profile row is auto-created
+- [ ] User can sign up — profile auto-created
 - [ ] User can sign in and is redirected to the app
-- [ ] User can create an org and is added as owner in `org_members`
-- [ ] Unauthenticated users are redirected to `/login`
-- [ ] Users with no org are redirected to `/onboarding`
-- [ ] App theme matches design guidelines (colors, typography, spacing)
+- [ ] User with no org is redirected to `/onboarding`
+- [ ] User can create an org and is added as owner
+- [ ] Mobile bottom nav and desktop tab nav both render correctly
+- [ ] App theme matches design guidelines
 
 ---
 
-## Phase 2 · Transactions
+## Phase 2 · Transactions ← Next after Phase 1
 
-**What gets built:**
-- `transactions` table + RLS
-- Transaction entry form (amount, category, type: personal/business, date, notes)
-- Transaction list view — filterable by month, type, category
-- Edit and delete transactions
+**What gets built:** TASK-006 through TASK-010
 
-**Prerequisites:** Phase 1 complete (auth + org in place)
+- Category management (default 13 categories / ~60 subcategories seeded per org)
+- Budget defaults + Settings screen (IRS rate, per-subcategory monthly budget, default biz %, subcategory add/rename/delete)
+- Transaction data layer (model, service, CRUD, calculations helper)
+- Add/Edit Transaction form (bottom sheet/dialog, live split preview, biz% auto-apply)
+- Transactions list screen (mobile chip/list, desktop toolbar/table, filters, empty state)
 
 **Acceptance criteria:**
-- [ ] User can log a transaction with all fields
-- [ ] Transaction list shows current month by default
-- [ ] Filtering by type (personal/business) and category works
-- [ ] Edit and delete work correctly
-- [ ] All queries scoped to `org_id`
+- [ ] Default categories seeded on new org
+- [ ] IRS rate and budget defaults save correctly
+- [ ] Transaction CRUD works, all scoped to org_id
+- [ ] Personal/business split preview is live and accurate
+- [ ] Filters work (month, category, personal/business)
+- [ ] Edit opens pre-filled form correctly
 
 ---
 
-## Phase 3 · Budget vs Actuals
+## Phase 3 · Dashboard & Monthly View
 
-**What gets built:**
-- `budgets` table (monthly budget per category) + RLS
-- Budget entry UI — set amounts per category per month
-- Budget vs actuals comparison view — planned vs spent per category
+**What gets built:** TASK-011 through TASK-012
 
-**Prerequisites:** Phase 2 complete (transactions must exist to compare against)
+- Dashboard screen (summary tiles, charts, category list, recent transactions)
+- Monthly Budget View (month pill selector, budget vs actual table, edit mode, charts)
+- Add `fl_chart` package
 
 **Acceptance criteria:**
-- [ ] Admin can set budget amounts per category per month
-- [ ] Budget vs actuals view shows planned, actual, and variance per category
-- [ ] Over-budget categories are visually highlighted
-- [ ] All queries scoped to `org_id`
+- [ ] Charts render with real data (bar, donut)
+- [ ] Budget vs actual is accurate per subcategory
+- [ ] Progress bars color correctly (green/amber/red)
+- [ ] Per-month budget overrides work and fall back to global defaults
+- [ ] Collapsible categories work on mobile
 
 ---
 
-## Phase 4 · Reports & Charts
+## Phase 4 · Mileage & Business Summary
 
-**What gets built:**
-- Monthly summary: income, expenses, net
-- Category breakdown chart (pie/donut)
-- Monthly trend chart (bar/line over 12 months)
-- Business vs personal split view
+**What gets built:** TASK-013 through TASK-014
 
-**Prerequisites:** Phase 3 complete (transactions + budgets must exist)
+- Mileage Log (CRUD, round trip, IRS rate deduction calculation, summary tiles)
+- Business Summary screen (deductions by category, mileage summary, year/month filter)
 
 **Acceptance criteria:**
-- [ ] Dashboard shows income, expenses, net for current month
-- [ ] Charts render correctly on mobile and desktop
-- [ ] Month selector allows navigating to prior months
-- [ ] Year-to-date summary is accurate
+- [ ] Round trip doubles miles correctly
+- [ ] Deductible value uses current IRS rate
+- [ ] Business summary totals match transaction biz% calculations
+- [ ] Mileage deduction section is accurate
 
 ---
 
-## Phase 5 · Receipt Management
+## Phase 5 · Receipts
 
-**What gets built:**
-- Receipt upload to Supabase Storage
-- `receipts` table (metadata: merchant, amount, date, category, transaction_id) + RLS
-- Receipt list view — searchable/filterable
-- Download receipt to local disk
-- Link receipt to a transaction
+**What gets built:** TASK-015
 
-**Prerequisites:** Phase 2 complete (transactions must exist to attach receipts)
+- File upload to Supabase Storage (JPG, PNG, PDF, 10MB max)
+- Receipt metadata table (`receipts`)
+- Receipt list screen (searchable, filterable)
+- Download to local disk (signed URL → browser download)
+- Link receipt to transaction (from receipt list or transaction form)
+- Storage usage indicator in Settings
 
 **Acceptance criteria:**
-- [ ] User can upload a receipt image (JPG, PNG, PDF)
-- [ ] Receipt metadata is saved and searchable
-- [ ] Receipt can be downloaded to local disk
-- [ ] Receipt can be linked to a transaction
-- [ ] Receipt list is filterable by date, category, merchant
+- [ ] Upload works for JPG, PNG, PDF
+- [ ] Metadata saved and searchable
+- [ ] Download triggers browser file download
+- [ ] Receipt linkable to a transaction
+- [ ] Storage usage shown in Settings
 
 ---
 
