@@ -10,14 +10,6 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/error_view.dart';
 import '../providers/auth_provider.dart';
 
-final AutoDisposeStateProvider<String> _fullNameProvider =
-    StateProvider.autoDispose<String>((Ref ref) => '');
-final AutoDisposeStateProvider<String> _emailProvider =
-    StateProvider.autoDispose<String>((Ref ref) => '');
-final AutoDisposeStateProvider<String> _passwordProvider =
-    StateProvider.autoDispose<String>((Ref ref) => '');
-final AutoDisposeStateProvider<String> _confirmPasswordProvider =
-    StateProvider.autoDispose<String>((Ref ref) => '');
 final AutoDisposeStateProvider<bool> _obscurePasswordProvider =
     StateProvider.autoDispose<bool>((Ref ref) => true);
 final AutoDisposeStateProvider<bool> _isSubmittingProvider =
@@ -25,11 +17,30 @@ final AutoDisposeStateProvider<bool> _isSubmittingProvider =
 final AutoDisposeStateProvider<String?> _errorProvider =
     StateProvider.autoDispose<String?>((Ref ref) => null);
 
-class SignUpScreen extends ConsumerWidget {
+class SignUpScreen extends ConsumerStatefulWidget {
   const SignUpScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SignUpScreen> createState() => _SignUpScreenState();
+}
+
+class _SignUpScreenState extends ConsumerState<SignUpScreen> {
+  final TextEditingController _fullNameController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _confirmPasswordController = TextEditingController();
+
+  @override
+  void dispose() {
+    _fullNameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final bool isSubmitting = ref.watch(_isSubmittingProvider);
     final bool obscurePassword = ref.watch(_obscurePasswordProvider);
     final String? errorMessage = ref.watch(_errorProvider);
@@ -57,26 +68,24 @@ class SignUpScreen extends ConsumerWidget {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: <Widget>[
                           TextField(
+                            controller: _fullNameController,
                             textInputAction: TextInputAction.next,
                             decoration: const InputDecoration(
                               labelText: 'Full Name',
                             ),
-                            onChanged: (String value) =>
-                                ref.read(_fullNameProvider.notifier).state =
-                                    value,
                           ),
                           const SizedBox(height: AppConstants.spacingMd),
                           TextField(
+                            controller: _emailController,
                             keyboardType: TextInputType.emailAddress,
                             textInputAction: TextInputAction.next,
                             decoration: const InputDecoration(
                               labelText: 'Email',
                             ),
-                            onChanged: (String value) =>
-                                ref.read(_emailProvider.notifier).state = value,
                           ),
                           const SizedBox(height: AppConstants.spacingMd),
                           TextField(
+                            controller: _passwordController,
                             obscureText: obscurePassword,
                             textInputAction: TextInputAction.next,
                             decoration: InputDecoration(
@@ -96,22 +105,15 @@ class SignUpScreen extends ConsumerWidget {
                                 ),
                               ),
                             ),
-                            onChanged: (String value) =>
-                                ref.read(_passwordProvider.notifier).state =
-                                    value,
                           ),
                           const SizedBox(height: AppConstants.spacingMd),
                           TextField(
+                            controller: _confirmPasswordController,
                             obscureText: obscurePassword,
                             textInputAction: TextInputAction.done,
                             decoration: const InputDecoration(
                               labelText: 'Confirm Password',
                             ),
-                            onChanged: (String value) =>
-                                ref
-                                        .read(_confirmPasswordProvider.notifier)
-                                        .state =
-                                    value,
                             onSubmitted: (_) => _submit(context, ref),
                           ),
                           if (errorMessage != null) ...<Widget>[
@@ -170,10 +172,10 @@ class SignUpScreen extends ConsumerWidget {
     final GoRouter router = GoRouter.of(context);
     final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
 
-    final String fullName = ref.read(_fullNameProvider).trim();
-    final String email = ref.read(_emailProvider).trim();
-    final String password = ref.read(_passwordProvider);
-    final String confirmPassword = ref.read(_confirmPasswordProvider);
+    final String fullName = _fullNameController.text.trim();
+    final String email = _emailController.text.trim();
+    final String password = _passwordController.text;
+    final String confirmPassword = _confirmPasswordController.text;
 
     if (fullName.isEmpty) {
       ref.read(_errorProvider.notifier).state = 'Please enter your full name.';

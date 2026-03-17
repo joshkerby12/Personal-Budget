@@ -7,7 +7,7 @@
 ## System Overview
 
 - **App name:** Personal Budget App
-- **Platform:** Web (mobile + desktop breakpoints via Flutter)
+- **Platform:** Flutter Web only (mobile + desktop breakpoints via responsive layouts — no native app)
 - **Framework:** Flutter / Dart
 - **State management:** Riverpod (`@riverpod` annotations, `riverpod_generator`)
 - **Auth:** Supabase Auth
@@ -96,6 +96,17 @@ specs/
 > Updated as spec sheets are added.
 
 - `auth_spec.md` — email/password sign up, sign in, sign out, forgot password
+- `orgs_spec.md` — create organization, become owner, redirect to dashboard
+- `shell_spec.md` — app shell, responsive nav (mobile bottom nav + FAB, desktop header + tab bar)
+- `categories_spec.md` — category model, service, provider, default seed (~60 subcategories across 13 parents)
+- `mileage_spec.md` — mileage trip model, CRUD, calculation helpers, full mobile/desktop UI
+- `settings_spec.md` — AppSettings + BudgetDefault models, settings service, settings screen (IRS rate + budget defaults table)
+- `invite_spec.md` — invite code schema, InviteService, onboarding fork (create vs join), invite code display in Settings
+- `transactions_spec.md` — Transaction model, service, helpers, Add/Edit form, mobile list + desktop table (TASK-008, 010, 011)
+- `dashboard_spec.md` — Dashboard screen, DashboardSummary, bar chart + donut chart, category progress, recent transactions (TASK-012)
+- `monthly_spec.md` — Monthly Budget View, budget vs actual, per-month overrides, edit mode, MonthlyBudgetData (TASK-013)
+- `business_spec.md` — Business Summary screen, business expense totals, mileage deduction, by-category table (TASK-014)
+- `receipts_spec.md` — Receipt upload to Supabase Storage, Receipt model, receipt list, link to transaction, signed URL download (TASK-015)
 
 ---
 
@@ -118,30 +129,36 @@ lib/features/[feature]/
 
 ## What's Working
 
-*(updated as features complete)*
+- Auth (sign up, sign in, sign out, forgot password)
+- Org onboarding (create household, join via invite code)
+- App shell — responsive nav (mobile bottom nav + FAB, desktop header + tab bar)
+- Category data layer — model, service, categoriesProvider, ~60 subcategory seed
+- Budget defaults + Settings screen — AppSettings, BudgetDefault, SettingsService, SettingsEditor (desktop + mobile), invite code section
+- Transactions feature — Transaction model, TransactionService CRUD + filters, calculation helpers, Add/Edit form, mobile list screen, desktop table screen
+- Mileage Log — MileageTrip model, MileageService, helpers, Add/Edit form, mobile list + desktop table
+- Monthly Budget View — MonthlyBudgetData provider, month selector, budget vs actual rows, per-month override edit/save/clear flows, desktop charts, mobile collapsible groups + bottom-sheet row editing
+- Dashboard screen — DashboardSummary provider, mobile summary/chart/category/recent cards, desktop year filter + bar/donut charts + category totals table
+- Business Summary screen — BusinessSummaryData provider, shared year/month filters, desktop summary/table view, mobile card/list view
+- Household invite system — invite_code on organizations, InviteService, onboarding fork (Create vs Join)
+- Receipt upload + management — Receipt Freezed model, ReceiptService (upload/download/link/delete), FilePicker, dart:html download, transaction form integration
 
 ---
 
 ## What Still Needs Building
 
-- Phase 1: Foundation (auth, org/profile, core routing, app shell)
-- Phase 2: Transactions (categories, budget defaults, settings, transaction CRUD, list)
-- Phase 3: Dashboard & Monthly View (charts via `fl_chart`, budget vs actual)
-- Phase 4: Mileage Log & Business Summary
-- Phase 5: Receipt Management (Supabase Storage upload, download, link to transaction)
+- Pre-launch: re-enable email confirmation in Supabase Auth
 
 ## Additional Packages (to be added as phases progress)
 
-- `fl_chart: ^0.69.0` — added in TASK-011 (Dashboard charts)
+- `fl_chart: ^0.69.0` — used for Dashboard and Monthly charts
 
 ---
 
 ## Pre-Launch Dependencies
 
-- **Apple Developer account** — not yet created. Required before App Store submission.
-- **Google Play Console account** — not yet created. Required before Play Store submission.
 - **Remote git repo** — created at `git@github.com:joshkerby12/Personal-Budget.git`
 - **Email confirmation** — currently disabled in Supabase Auth for development. Re-enable before production launch.
+- **Hosting** — Flutter web build deployed via GitHub Pages (workflow already in place). Confirm custom domain if desired.
 
 ---
 

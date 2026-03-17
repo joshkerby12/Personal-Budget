@@ -2,10 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../features/auth/presentation/providers/auth_provider.dart';
 import '../../features/auth/presentation/screens/forgot_password_screen.dart';
 import '../../features/auth/presentation/screens/sign_in_screen.dart';
 import '../../features/auth/presentation/screens/sign_up_screen.dart';
+import '../../features/business/business_screen.dart';
+import '../../features/dashboard/dashboard_screen.dart';
+import '../../features/mileage/mileage_screen.dart';
+import '../../features/monthly/monthly_screen.dart';
+import '../../features/onboarding/presentation/screens/onboarding_screen.dart';
+import '../../features/settings/settings_screen.dart';
+import '../../features/shell/app_shell.dart';
+import '../../features/transactions/transactions_screen.dart';
 import '../constants/app_constants.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
@@ -51,35 +58,87 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
         path: AppRoutes.onboarding,
         name: AppRoutes.onboardingName,
         builder: (BuildContext context, GoRouterState state) =>
-            const _RoutePlaceholder(
-              title: 'Onboarding',
-              description: 'Create or join an organization to continue.',
-            ),
+            const OnboardingScreen(),
       ),
-      GoRoute(
-        path: AppRoutes.dashboard,
-        name: AppRoutes.dashboardName,
-        builder: (BuildContext context, GoRouterState state) =>
-            const _RoutePlaceholder(
-              title: 'Dashboard',
-              description: 'Budget dashboard is coming next.',
-              showSignOut: true,
-            ),
+      StatefulShellRoute.indexedStack(
+        builder:
+            (
+              BuildContext context,
+              GoRouterState state,
+              StatefulNavigationShell navigationShell,
+            ) => AppShell(navigationShell: navigationShell),
+        branches: <StatefulShellBranch>[
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              GoRoute(
+                path: AppRoutes.dashboard,
+                name: AppRoutes.dashboardName,
+                builder: (BuildContext context, GoRouterState state) =>
+                    const DashboardScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              GoRoute(
+                path: AppRoutes.monthly,
+                name: AppRoutes.monthlyName,
+                builder: (BuildContext context, GoRouterState state) =>
+                    const MonthlyScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              GoRoute(
+                path: AppRoutes.transactions,
+                name: AppRoutes.transactionsName,
+                builder: (BuildContext context, GoRouterState state) =>
+                    const TransactionsScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              GoRoute(
+                path: AppRoutes.mileage,
+                name: AppRoutes.mileageName,
+                builder: (BuildContext context, GoRouterState state) =>
+                    const MileageScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              GoRoute(
+                path: AppRoutes.business,
+                name: AppRoutes.businessName,
+                builder: (BuildContext context, GoRouterState state) =>
+                    const BusinessScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              GoRoute(
+                path: AppRoutes.settings,
+                name: AppRoutes.settingsName,
+                builder: (BuildContext context, GoRouterState state) =>
+                    const SettingsScreen(),
+              ),
+            ],
+          ),
+        ],
       ),
     ],
   );
 });
 
 class _RoutePlaceholder extends ConsumerWidget {
-  const _RoutePlaceholder({
-    required this.title,
-    required this.description,
-    this.showSignOut = false,
-  });
+  const _RoutePlaceholder({required this.title, required this.description});
 
   final String title;
   final String description;
-  final bool showSignOut;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -104,20 +163,6 @@ class _RoutePlaceholder extends ConsumerWidget {
                   Text(title, style: AppTextStyles.pageTitle),
                   const SizedBox(height: AppConstants.spacingMd),
                   Text(description, style: AppTextStyles.body),
-                  if (showSignOut) ...<Widget>[
-                    const SizedBox(height: AppConstants.spacingLg),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () async {
-                          final GoRouter router = GoRouter.of(context);
-                          await ref.read(authServiceProvider).signOut();
-                          router.refresh();
-                        },
-                        child: const Text('Sign Out'),
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ),

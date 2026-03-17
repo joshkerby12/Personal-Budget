@@ -96,6 +96,10 @@ class RouterNotifier implements Listenable {
     _listeners.remove(listener);
   }
 
+  void clearOrgCache() {
+    _cachedHasOrganization = null;
+  }
+
   void _notifyListeners() {
     for (final VoidCallback listener in _listeners.toList()) {
       listener();

@@ -10,10 +10,6 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/error_view.dart';
 import '../providers/auth_provider.dart';
 
-final AutoDisposeStateProvider<String> _emailProvider =
-    StateProvider.autoDispose<String>((Ref ref) => '');
-final AutoDisposeStateProvider<String> _passwordProvider =
-    StateProvider.autoDispose<String>((Ref ref) => '');
 final AutoDisposeStateProvider<bool> _obscurePasswordProvider =
     StateProvider.autoDispose<bool>((Ref ref) => true);
 final AutoDisposeStateProvider<bool> _isSubmittingProvider =
@@ -21,11 +17,26 @@ final AutoDisposeStateProvider<bool> _isSubmittingProvider =
 final AutoDisposeStateProvider<String?> _errorProvider =
     StateProvider.autoDispose<String?>((Ref ref) => null);
 
-class SignInScreen extends ConsumerWidget {
+class SignInScreen extends ConsumerStatefulWidget {
   const SignInScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SignInScreen> createState() => _SignInScreenState();
+}
+
+class _SignInScreenState extends ConsumerState<SignInScreen> {
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final bool isSubmitting = ref.watch(_isSubmittingProvider);
     final bool obscurePassword = ref.watch(_obscurePasswordProvider);
     final String? errorMessage = ref.watch(_errorProvider);
@@ -53,16 +64,16 @@ class SignInScreen extends ConsumerWidget {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: <Widget>[
                           TextField(
+                            controller: _emailController,
                             keyboardType: TextInputType.emailAddress,
                             textInputAction: TextInputAction.next,
                             decoration: const InputDecoration(
                               labelText: 'Email',
                             ),
-                            onChanged: (String value) =>
-                                ref.read(_emailProvider.notifier).state = value,
                           ),
                           const SizedBox(height: AppConstants.spacingMd),
                           TextField(
+                            controller: _passwordController,
                             obscureText: obscurePassword,
                             textInputAction: TextInputAction.done,
                             decoration: InputDecoration(
@@ -70,11 +81,8 @@ class SignInScreen extends ConsumerWidget {
                               suffixIcon: IconButton(
                                 onPressed: () =>
                                     ref
-                                            .read(
-                                              _obscurePasswordProvider.notifier,
-                                            )
-                                            .state =
-                                        !obscurePassword,
+                                        .read(_obscurePasswordProvider.notifier)
+                                        .state = !obscurePassword,
                                 icon: Icon(
                                   obscurePassword
                                       ? Icons.visibility
@@ -82,10 +90,7 @@ class SignInScreen extends ConsumerWidget {
                                 ),
                               ),
                             ),
-                            onChanged: (String value) =>
-                                ref.read(_passwordProvider.notifier).state =
-                                    value,
-                            onSubmitted: (_) => _submit(context, ref),
+                            onSubmitted: (_) => _submit(context),
                           ),
                           const SizedBox(height: AppConstants.spacingSm),
                           Align(
@@ -93,8 +98,7 @@ class SignInScreen extends ConsumerWidget {
                             child: TextButton(
                               onPressed: isSubmitting
                                   ? null
-                                  : () =>
-                                        context.push(AppRoutes.forgotPassword),
+                                  : () => context.push(AppRoutes.forgotPassword),
                               child: const Text('Forgot password?'),
                             ),
                           ),
@@ -108,7 +112,7 @@ class SignInScreen extends ConsumerWidget {
                             child: ElevatedButton(
                               onPressed: isSubmitting
                                   ? null
-                                  : () => _submit(context, ref),
+                                  : () => _submit(context),
                               child: isSubmitting
                                   ? const SizedBox(
                                       width: 18,
@@ -150,12 +154,12 @@ class SignInScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _submit(BuildContext context, WidgetRef ref) async {
+  Future<void> _submit(BuildContext context) async {
     final GoRouter router = GoRouter.of(context);
     final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
 
-    final String email = ref.read(_emailProvider).trim();
-    final String password = ref.read(_passwordProvider);
+    final String email = _emailController.text.trim();
+    final String password = _passwordController.text;
 
     if (email.isEmpty || !email.contains('@')) {
       ref.read(_errorProvider.notifier).state =
