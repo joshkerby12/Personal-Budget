@@ -107,6 +107,7 @@ specs/
 - `monthly_spec.md` — Monthly Budget View, budget vs actual, per-month overrides, edit mode, MonthlyBudgetData (TASK-013)
 - `business_spec.md` — Business Summary screen, business expense totals, mileage deduction, by-category table (TASK-014)
 - `receipts_spec.md` — Receipt upload to Supabase Storage, Receipt model, receipt list, link to transaction, signed URL download (TASK-015)
+- `teller_spec.md` — Teller bank integration: enrollment, periodic sync, connected accounts UI, edge functions (TASK-018)
 
 ---
 
@@ -146,6 +147,7 @@ lib/features/[feature]/
 
 ## What Still Needs Building
 
+- Teller bank integration — enrollment, sync, connected accounts UI (TASK-018)
 - Pre-launch: re-enable email confirmation in Supabase Auth
 
 ## Additional Packages (to be added as phases progress)

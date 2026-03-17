@@ -330,5 +330,56 @@ TASK-010/011/012/013/015 can all run simultaneously. TASK-014 needs TASK-008 and
 | TASK-013 | Monthly Budget View | TASK-007, TASK-008 | done |
 | TASK-014 | Business Summary | TASK-008, TASK-009 | done |
 | TASK-015 | Receipt upload + management | TASK-008 | done |
+| TASK-018 | Teller bank integration | TASK-008, TASK-007 | ready |
 
 **Phase 2 is fully open. All specs written. Codex may pick up any `ready` task.**
+
+---
+
+## Phase 3 · Teller Bank Integration (TASK-018)
+
+---
+
+### TASK-018 · Teller bank account integration
+- **Status:** ready
+- **Depends on:** TASK-008 (transactions table), TASK-007 (settings screen)
+- **Spec:** `specs/teller_spec.md`
+- **What to build:**
+
+  **Step 1 — Database migration**
+  - Create `teller_enrollments` table with RLS (see spec)
+  - Create `teller_sync_log` table with RLS (see spec)
+  - Alter `transactions`: add `source text not null default 'manual'`, add `teller_transaction_id text unique`
+  - Migration file: `supabase/migrations/20260317030000_teller.sql`
+
+  **Step 2 — Edge Functions (3 files)**
+  - `supabase/functions/teller-enroll/index.ts` — receives enrollment from Flutter, calls Teller `/accounts`, stores token + account details, triggers initial 90-day sync
+  - `supabase/functions/teller-sync/index.ts` — syncs transactions for one or all enrollments; called by cron and manually; deduplicates by `teller_transaction_id`; sets `category='Uncategorized'` except income credits on depository accounts → `category='Income'`, `subcategory='Other Income'`
+  - `supabase/functions/teller-disconnect/index.ts` — marks enrollment inactive, calls Teller DELETE
+  - All functions: JWT disabled, verify manually; use `esm.sh` imports; mTLS via `Deno.createHttpClient`
+
+  **Step 3 — Flutter data layer**
+  - `lib/features/teller/models/teller_enrollment.dart` — Freezed model (no `accessToken` field)
+  - `lib/features/teller/data/teller_service.dart` — `fetchEnrollments`, `enroll`, `syncNow`, `disconnect`
+  - `lib/features/teller/presentation/providers/teller_provider.dart` — `tellerEnrollmentsProvider`, `TellerController`
+  - `lib/features/teller/helpers/teller_connect.dart` — JS interop to launch Teller Connect widget
+  - Run `build_runner` after providers
+
+  **Step 4 — web/index.html**
+  - Add `<script src="https://cdn.teller.io/connect/connect.js"></script>` before `</body>`
+
+  **Step 5 — .env**
+  - Add `TELLER_APP_ID=` to `.env` and `.env.example`
+
+  **Step 6 — Settings UI**
+  - Add "Connected Bank Accounts" card to `SettingsEditor` (desktop + mobile)
+  - Empty state: "No bank accounts connected" + Connect Account button
+  - Per-account row: institution name, account name, last four, last synced timestamp, Sync Now button, Disconnect button
+  - Connect Account → launches Teller Connect → on success → calls `TellerController.enroll` → shows "Importing transactions..." snackbar → refreshes list
+  - Sync Now → calls `syncNow` → snackbar with count: "Imported N transactions"
+  - Disconnect → confirmation dialog → calls `disconnect`
+
+  **Step 7 — pg_cron** (manual setup — Codex documents the SQL, director runs it)
+  - Write the cron SQL to `docs/teller_cron_setup.md` — do NOT run it; director will set up in Supabase dashboard
+
+- **When done:** Change status to `ready-to-review`
