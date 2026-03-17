@@ -1,0 +1,10 @@
+project_id = "xzjfxqkdzeawfnhfusut"
+
+[functions.teller-enroll]
+verify_jwt = false
+
+[functions.teller-sync]
+verify_jwt = false
+
+[functions.teller-disconnect]
+verify_jwt = false

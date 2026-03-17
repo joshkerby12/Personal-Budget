@@ -1,17 +1,23 @@
+import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/constants/supabase_constants.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/error_view.dart';
 import '../../../receipts/helpers/receipt_formatters.dart';
 import '../../../receipts/models/receipt.dart';
 import '../../../receipts/presentation/providers/receipt_provider.dart';
+import '../../../teller/helpers/teller_connect.dart';
+import '../../../teller/models/teller_enrollment.dart';
+import '../../../teller/presentation/providers/teller_provider.dart';
 import '../../../transactions/helpers/transaction_calculations.dart';
 import '../../helpers/settings_file_io.dart';
 import '../../models/app_settings.dart';
@@ -53,6 +59,7 @@ class _SettingsEditorState extends ConsumerState<SettingsEditor> {
 
   int _newRowCounter = 0;
   bool _isRegeneratingInviteCode = false;
+  bool _isConnectingBankAccount = false;
   final Set<String> _pendingDeleteIds = <String>{};
 
   @override
@@ -164,6 +171,12 @@ class _SettingsEditorState extends ConsumerState<SettingsEditor> {
     final bool isSubmitting =
         ref.watch(settingsControllerProvider).isLoading ||
         _isRegeneratingInviteCode;
+    final AsyncValue<List<TellerEnrollment>> enrollmentsAsync = ref.watch(
+      tellerEnrollmentsProvider(widget.orgId),
+    );
+    final bool isTellerLoading =
+        ref.watch(tellerControllerProvider).isLoading ||
+        _isConnectingBankAccount;
     final AsyncValue<String?> inviteCodeAsync = ref.watch(
       inviteCodeProvider(widget.orgId),
     );
@@ -181,6 +194,11 @@ class _SettingsEditorState extends ConsumerState<SettingsEditor> {
             inviteCodeAsync: inviteCodeAsync,
             isOwnerAsync: isOwnerAsync,
             isSubmitting: isSubmitting,
+          ),
+          const SizedBox(height: AppConstants.spacingMd),
+          _buildConnectedAccountsCard(
+            enrollmentsAsync: enrollmentsAsync,
+            isBusy: isTellerLoading,
           ),
           const SizedBox(height: AppConstants.spacingMd),
           if (widget.isMobile) ...<Widget>[
@@ -302,6 +320,290 @@ class _SettingsEditorState extends ConsumerState<SettingsEditor> {
         ),
       ),
     );
+  }
+
+  Widget _buildConnectedAccountsCard({
+    required AsyncValue<List<TellerEnrollment>> enrollmentsAsync,
+    required bool isBusy,
+  }) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(AppConstants.spacingLg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: Text(
+                    'Connected Bank Accounts',
+                    style: AppTextStyles.cardTitle,
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: isBusy ? null : _connectBankAccount,
+                  child: const Text('Connect Account'),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppConstants.spacingXs),
+            const Text(
+              'Connect your bank to import transactions automatically.',
+              style: AppTextStyles.body,
+            ),
+            const SizedBox(height: AppConstants.spacingMd),
+            if (isBusy) ...<Widget>[
+              const LinearProgressIndicator(minHeight: 2),
+              const SizedBox(height: AppConstants.spacingSm),
+            ],
+            enrollmentsAsync.when(
+              loading: () => const Text(
+                'Loading connected accounts...',
+                style: AppTextStyles.body,
+              ),
+              error: (Object error, StackTrace stackTrace) => const ErrorView(
+                message: 'Unable to load connected accounts right now.',
+              ),
+              data: (List<TellerEnrollment> enrollments) {
+                if (enrollments.isEmpty) {
+                  return const Text(
+                    'No bank accounts connected.',
+                    style: AppTextStyles.body,
+                  );
+                }
+
+                return Column(
+                  children: enrollments
+                      .map(
+                        (TellerEnrollment enrollment) =>
+                            _buildConnectedAccountRow(
+                              enrollment,
+                              isBusy: isBusy,
+                            ),
+                      )
+                      .toList(growable: false),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildConnectedAccountRow(
+    TellerEnrollment enrollment, {
+    required bool isBusy,
+  }) {
+    final String accountLastFour =
+        enrollment.accountLastFour == null ||
+            enrollment.accountLastFour!.trim().isEmpty
+        ? ''
+        : ' ••••${enrollment.accountLastFour}';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppConstants.spacingSm),
+      padding: const EdgeInsets.all(AppConstants.spacingSm),
+      decoration: BoxDecoration(
+        color: AppColors.lightGray,
+        borderRadius: BorderRadius.circular(AppConstants.spacingSm),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            '${enrollment.institutionName} • ${enrollment.accountName}$accountLastFour',
+            style: AppTextStyles.body.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: AppConstants.spacingXs),
+          Text(
+            'Last synced: ${_formatLastSynced(enrollment.lastSyncedAt)}',
+            style: AppTextStyles.label,
+          ),
+          const SizedBox(height: AppConstants.spacingSm),
+          Wrap(
+            spacing: AppConstants.spacingSm,
+            runSpacing: AppConstants.spacingSm,
+            children: <Widget>[
+              OutlinedButton(
+                onPressed: isBusy ? null : () => _syncNow(enrollment),
+                child: const Text('Sync Now'),
+              ),
+              TextButton(
+                onPressed: isBusy
+                    ? null
+                    : () => _disconnectEnrollment(enrollment),
+                style: TextButton.styleFrom(foregroundColor: AppColors.red),
+                child: const Text('Disconnect'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatLastSynced(DateTime? value) {
+    if (value == null) {
+      return 'Never';
+    }
+    return DateFormat('MMM d, y \'at\' h:mm a').format(value.toLocal());
+  }
+
+  Future<void> _connectBankAccount() async {
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    final String appId = (SupabaseConstants.tellerAppId ?? '').trim();
+    if (appId.isEmpty) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Missing TELLER_APP_ID in your .env file.'),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isConnectingBankAccount = true;
+    });
+
+    try {
+      launchTellerConnect(
+        appId: appId,
+        onSuccess: (String enrollmentId, String accessToken) {
+          unawaited(_completeTellerEnrollment(enrollmentId, accessToken));
+        },
+        onError: (String message) {
+          if (!mounted) {
+            return;
+          }
+          setState(() {
+            _isConnectingBankAccount = false;
+          });
+          if (message == 'Teller Connect was canceled.') {
+            return;
+          }
+          messenger.showSnackBar(SnackBar(content: Text(message)));
+        },
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isConnectingBankAccount = false;
+      });
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Unable to launch Teller Connect right now.'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _completeTellerEnrollment(
+    String enrollmentId,
+    String accessToken,
+  ) async {
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref
+          .read(tellerControllerProvider.notifier)
+          .enroll(widget.orgId, enrollmentId, accessToken);
+      if (!mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Connected! Importing transactions...')),
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Unable to connect account right now.')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isConnectingBankAccount = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _syncNow(TellerEnrollment enrollment) async {
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    try {
+      final int imported = await ref
+          .read(tellerControllerProvider.notifier)
+          .syncNow(widget.orgId, enrollment.id);
+      if (!mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(content: Text('Imported $imported transactions')),
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Unable to sync account right now.')),
+      );
+    }
+  }
+
+  Future<void> _disconnectEnrollment(TellerEnrollment enrollment) async {
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    final bool? shouldDisconnect = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Disconnect bank account?'),
+          content: Text(
+            'Disconnect ${enrollment.institutionName} • ${enrollment.accountName}? '
+            'You can reconnect later.',
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              style: TextButton.styleFrom(foregroundColor: AppColors.red),
+              child: const Text('Disconnect'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldDisconnect != true) {
+      return;
+    }
+
+    try {
+      await ref
+          .read(tellerControllerProvider.notifier)
+          .disconnect(widget.orgId, enrollment.id);
+      if (!mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Bank account disconnected')),
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Unable to disconnect account right now.'),
+        ),
+      );
+    }
   }
 
   Widget _buildMileageRateCard(bool isSubmitting) {
@@ -459,16 +761,17 @@ class _SettingsEditorState extends ConsumerState<SettingsEditor> {
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     buildDefaultDragHandles: false,
-                    onReorder: (int oldIndex, int newIndex) =>
-                        _moveRow(category, oldIndex, newIndex > oldIndex ? newIndex - 1 : newIndex),
+                    onReorder: (int oldIndex, int newIndex) => _moveRow(
+                      category,
+                      oldIndex,
+                      newIndex > oldIndex ? newIndex - 1 : newIndex,
+                    ),
                     children: rows
                         .asMap()
                         .entries
                         .map(
-                          (MapEntry<int, _BudgetRow> e) => _buildDesktopRow(
-                            e.value,
-                            index: e.key,
-                          ),
+                          (MapEntry<int, _BudgetRow> e) =>
+                              _buildDesktopRow(e.value, index: e.key),
                         )
                         .toList(growable: false),
                   ),
@@ -488,10 +791,7 @@ class _SettingsEditorState extends ConsumerState<SettingsEditor> {
     );
   }
 
-  Widget _buildDesktopRow(
-    _BudgetRow row, {
-    required int index,
-  }) {
+  Widget _buildDesktopRow(_BudgetRow row, {required int index}) {
     return Container(
       key: ValueKey<String>(row.localKey),
       color: row.isNew ? AppColors.greenFill : AppColors.white,
@@ -506,7 +806,11 @@ class _SettingsEditorState extends ConsumerState<SettingsEditor> {
             index: index,
             child: const Padding(
               padding: EdgeInsets.symmetric(vertical: 12, horizontal: 2),
-              child: Icon(Icons.drag_handle, size: 18, color: AppColors.textMuted),
+              child: Icon(
+                Icons.drag_handle,
+                size: 18,
+                color: AppColors.textMuted,
+              ),
             ),
           ),
           const SizedBox(width: AppConstants.spacingSm),
@@ -751,7 +1055,9 @@ class _SettingsEditorState extends ConsumerState<SettingsEditor> {
         return InkWell(
           onTap: () => _toggleRowEditing(row.localKey, true),
           child: Container(
-            padding: const EdgeInsets.symmetric(vertical: AppConstants.spacingSm),
+            padding: const EdgeInsets.symmetric(
+              vertical: AppConstants.spacingSm,
+            ),
             child: Text('\$${controller.text}', style: AppTextStyles.body),
           ),
         );
@@ -781,7 +1087,9 @@ class _SettingsEditorState extends ConsumerState<SettingsEditor> {
         return InkWell(
           onTap: () => _toggleRowEditing(row.localKey, true),
           child: Container(
-            padding: const EdgeInsets.symmetric(vertical: AppConstants.spacingSm),
+            padding: const EdgeInsets.symmetric(
+              vertical: AppConstants.spacingSm,
+            ),
             child: Text('${controller.text}%', style: AppTextStyles.body),
           ),
         );

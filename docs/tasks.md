@@ -330,7 +330,7 @@ TASK-010/011/012/013/015 can all run simultaneously. TASK-014 needs TASK-008 and
 | TASK-013 | Monthly Budget View | TASK-007, TASK-008 | done |
 | TASK-014 | Business Summary | TASK-008, TASK-009 | done |
 | TASK-015 | Receipt upload + management | TASK-008 | done |
-| TASK-018 | Teller bank integration | TASK-008, TASK-007 | ready |
+| TASK-018 | Teller bank integration | TASK-008, TASK-007 | ready-to-review |
 
 **Phase 2 is fully open. All specs written. Codex may pick up any `ready` task.**
 
@@ -341,7 +341,7 @@ TASK-010/011/012/013/015 can all run simultaneously. TASK-014 needs TASK-008 and
 ---
 
 ### TASK-018 · Teller bank account integration
-- **Status:** ready
+- **Status:** ready-to-review
 - **Depends on:** TASK-008 (transactions table), TASK-007 (settings screen)
 - **Spec:** `specs/teller_spec.md`
 - **What to build:**

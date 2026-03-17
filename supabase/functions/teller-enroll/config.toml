@@ -1,0 +1,2 @@
+[functions.teller-enroll]
+verify_jwt = false

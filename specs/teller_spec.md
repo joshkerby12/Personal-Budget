@@ -423,7 +423,7 @@ void launchTellerConnect({
   required void Function(String enrollmentId, String accessToken) onSuccess,
 }) {
   final handler = _tellerConnectSetup({
-    'appId': appId,
+    'applicationId': appId,
     'environment': 'development',   // or 'production'
     'onSuccess': (JSObject enrollment) {
       final id = (enrollment['enrollment'] as JSObject)['id'].toString();

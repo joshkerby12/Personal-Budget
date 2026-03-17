@@ -1,0 +1,2 @@
+[functions.teller-disconnect]
+verify_jwt = false

@@ -1,0 +1,2 @@
+[functions.teller-sync]
+verify_jwt = false
