@@ -64,6 +64,7 @@ class TransactionService {
       'is_split': transaction.isSplit,
       'receipt_id': transaction.receiptId,
       'notes': transaction.notes,
+      'no_miles': transaction.noMiles,
       'created_at': transaction.createdAt.toUtc().toIso8601String(),
     });
   }
@@ -82,6 +83,7 @@ class TransactionService {
           'is_split': transaction.isSplit,
           'receipt_id': transaction.receiptId,
           'notes': transaction.notes,
+          'no_miles': transaction.noMiles,
         })
         .eq('id', transaction.id);
   }

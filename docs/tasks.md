@@ -38,7 +38,7 @@ Active task queue. Claude authors and scopes all tasks. Codex picks up `ready` t
 ---
 
 ### TASK-022 · Missing miles panel on Monthly Budget View
-- **Status:** ready
+- **Status:** ready-to-review
 - **Depends on:** TASK-013
 - **What to build:**
   On the desktop Monthly Budget View, show a collapsible panel (similar to the uncategorized panel) that flags Business and Healthcare transactions that are missing mileage data. Users can log miles inline or mark a transaction as "No Miles" to dismiss it.

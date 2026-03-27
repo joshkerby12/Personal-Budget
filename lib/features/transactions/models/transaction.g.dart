@@ -20,6 +20,7 @@ _Transaction _$TransactionFromJson(Map<String, dynamic> json) => _Transaction(
   isSplit: json['is_split'] as bool,
   receiptId: json['receipt_id'] as String?,
   notes: json['notes'] as String?,
+  noMiles: json['no_miles'] as bool? ?? false,
   createdAt: DateTime.parse(json['created_at'] as String),
 );
 
@@ -38,5 +39,6 @@ Map<String, dynamic> _$TransactionToJson(_Transaction instance) =>
       'is_split': instance.isSplit,
       'receipt_id': instance.receiptId,
       'notes': instance.notes,
+      'no_miles': instance.noMiles,
       'created_at': instance.createdAt.toIso8601String(),
     };
