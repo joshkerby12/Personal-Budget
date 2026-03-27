@@ -16,6 +16,8 @@ import '../../../receipts/presentation/providers/receipt_provider.dart';
 import '../../../receipts/presentation/widgets/receipt_detail_sheet.dart';
 import '../../../settings/models/budget_default.dart';
 import '../../../settings/presentation/providers/settings_provider.dart';
+import '../../../mileage/models/mileage_trip.dart';
+import '../../../mileage/presentation/providers/mileage_provider.dart';
 import '../../helpers/transaction_calculations.dart';
 import '../../models/transaction.dart';
 import '../providers/transaction_provider.dart';
@@ -95,6 +97,8 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
   late final ValueNotifier<bool> _isSplitNotifier;
   late final ValueNotifier<String?> _attachedReceiptIdNotifier;
   late final ValueNotifier<String?> _attachedReceiptFilenameNotifier;
+  late final TextEditingController _milesController;
+  late final ValueNotifier<bool> _roundTripNotifier;
 
   late final bool _isEdit;
   bool _hasManualBizPctOverride = false;
@@ -114,6 +118,8 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
     _isSplitNotifier = ValueNotifier<bool>(transaction?.isSplit ?? false);
     _attachedReceiptIdNotifier = ValueNotifier<String?>(null);
     _attachedReceiptFilenameNotifier = ValueNotifier<String?>(null);
+    _milesController = TextEditingController();
+    _roundTripNotifier = ValueNotifier<bool>(false);
 
     _dateController = TextEditingController(text: _formatDate(date));
     _amountController = TextEditingController(
@@ -145,6 +151,8 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
     _isSplitNotifier.dispose();
     _attachedReceiptIdNotifier.dispose();
     _attachedReceiptFilenameNotifier.dispose();
+    _milesController.dispose();
+    _roundTripNotifier.dispose();
     super.dispose();
   }
 
@@ -192,8 +200,8 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
               onClose: widget.onClose,
             ),
             data: (List<BudgetDefault> defaults) {
-              final _CategoryData categoryData = _CategoryData.fromCategories(
-                categories,
+              final _CategoryData categoryData = _CategoryData.fromDefaults(
+                defaults,
               );
               _syncSelection(categoryData, defaults);
 
@@ -380,6 +388,65 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
                       },
                     ),
                     const SizedBox(height: AppConstants.spacingSm),
+                    ValueListenableBuilder<String?>(
+                      valueListenable: _selectedCategoryNotifier,
+                      builder: (BuildContext context, String? category, _) {
+                        final bool showMiles = category == 'Business' ||
+                            category == 'Medical';
+                        if (!showMiles) {
+                          return const SizedBox.shrink();
+                        }
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: <Widget>[
+                            TextFormField(
+                              controller: _milesController,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                decimal: true,
+                              ),
+                              decoration: const InputDecoration(
+                                labelText: 'Miles driven (optional)',
+                                suffixText: 'mi',
+                              ),
+                            ),
+                            const SizedBox(height: AppConstants.spacingSm),
+                            ValueListenableBuilder<bool>(
+                              valueListenable: _roundTripNotifier,
+                              builder: (
+                                BuildContext context,
+                                bool isRoundTrip,
+                                _,
+                              ) {
+                                return DropdownButtonFormField<bool>(
+                                  key: ValueKey<bool>(isRoundTrip),
+                                  initialValue: isRoundTrip,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Round trip?',
+                                  ),
+                                  items: const <DropdownMenuItem<bool>>[
+                                    DropdownMenuItem<bool>(
+                                      value: false,
+                                      child: Text('No'),
+                                    ),
+                                    DropdownMenuItem<bool>(
+                                      value: true,
+                                      child: Text('Yes'),
+                                    ),
+                                  ],
+                                  onChanged: (bool? value) {
+                                    if (value != null) {
+                                      _roundTripNotifier.value = value;
+                                    }
+                                  },
+                                );
+                              },
+                            ),
+                            const SizedBox(height: AppConstants.spacingSm),
+                          ],
+                        );
+                      },
+                    ),
                     TextFormField(
                       controller: _notesController,
                       minLines: 2,
@@ -527,8 +594,8 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
     if (selectedSubcategory == null ||
         !subcategories.contains(selectedSubcategory)) {
       _selectedSubcategoryNotifier.value = subcategories.first;
-      _maybeApplyDefaultBizPct(defaults);
     }
+    _maybeApplyDefaultBizPct(defaults);
   }
 
   void _maybeApplyDefaultBizPct(List<BudgetDefault> defaults) {
@@ -551,6 +618,7 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
     }
 
     if (match == null) {
+      _bizPctController.text = '0';
       return;
     }
 
@@ -641,6 +709,28 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
         await ref
             .read(receiptControllerProvider.notifier)
             .linkToTransaction(attachedReceiptId, transaction.id);
+      }
+
+      final double? miles = double.tryParse(_milesController.text.trim());
+      final String? cat = _selectedCategoryNotifier.value;
+      if (miles != null && miles > 0 && (cat == 'Business' || cat == 'Medical')) {
+        final MileageTrip trip = MileageTrip(
+          id: _uuid.v4(),
+          orgId: widget.orgId,
+          createdBy: userId,
+          date: _selectedDateNotifier.value,
+          purpose: _merchantController.text.trim(),
+          fromAddress: '',
+          toAddress: '',
+          oneWayMiles: miles,
+          isRoundTrip: _roundTripNotifier.value,
+          bizPct: bizPctValue,
+          category: cat == 'Business' ? 'Business - Other' : 'Medical',
+          createdAt: DateTime.now(),
+        );
+        await ref
+            .read(mileageControllerProvider.notifier)
+            .saveTrip(trip, isEdit: false);
       }
 
       if (!mounted) {
@@ -891,6 +981,33 @@ class _CategoryData {
 
   final List<String> parentCategories;
   final Map<String, List<String>> subcategoriesByParent;
+
+  factory _CategoryData.fromDefaults(List<BudgetDefault> defaults) {
+    final LinkedHashSet<String> parents = LinkedHashSet<String>();
+    final Map<String, LinkedHashSet<String>> grouped =
+        <String, LinkedHashSet<String>>{};
+
+    for (final BudgetDefault d in defaults) {
+      parents.add(d.category);
+      grouped
+          .putIfAbsent(d.category, () => LinkedHashSet<String>())
+          .add(d.subcategory);
+    }
+
+    // Always include Transfers so CC payments can be categorized
+    grouped.putIfAbsent('Transfers', () => LinkedHashSet<String>())
+      ..add('Credit Card Payment')
+      ..add('Account Transfer');
+    parents.add('Transfers');
+
+    return _CategoryData(
+      parentCategories: parents.toList(growable: false),
+      subcategoriesByParent: grouped.map(
+        (String key, LinkedHashSet<String> value) =>
+            MapEntry<String, List<String>>(key, value.toList(growable: false)),
+      ),
+    );
+  }
 
   factory _CategoryData.fromCategories(List<Category> categories) {
     final LinkedHashSet<String> parents = LinkedHashSet<String>();
