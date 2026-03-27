@@ -157,7 +157,7 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
     final List<Transaction> uncategorizedTransactions =
         _filterUncategorizedTransactions(data);
     final AsyncValue<List<Transaction>> historyAsync =
-        widget.isMobile || uncategorizedTransactions.isEmpty
+        uncategorizedTransactions.isEmpty
         ? const AsyncData<List<Transaction>>(<Transaction>[])
         : ref.watch(recentCategorizedTransactionsProvider(orgId));
     final List<Transaction> suggestionHistory =
@@ -182,8 +182,15 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
         if (widget.isMobile) ...<Widget>[
           _buildMobileSummaryRow(data.rows),
           const SizedBox(height: AppConstants.spacingSm),
-          _buildMobileTransactionList(context, orgId, data),
-          const SizedBox(height: AppConstants.spacingMd),
+          _buildUncategorizedPanel(
+            context,
+            orgId: orgId,
+            data: data,
+            transactions: uncategorizedTransactions,
+            suggestionHistory: suggestionHistory,
+          ),
+          if (uncategorizedTransactions.isNotEmpty)
+            const SizedBox(height: AppConstants.spacingMd),
         ],
         if (!_hasTransactions(data.rows)) ...<Widget>[
           Container(
@@ -420,100 +427,6 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
         'Expenses: ${_formatCurrency(summary.expenses)} | '
         'Net: ${_formatCurrency(summary.net)}',
         style: muted.copyWith(fontSize: 12, fontWeight: FontWeight.w500),
-      ),
-    );
-  }
-
-  Widget _buildMobileTransactionList(
-    BuildContext context,
-    String orgId,
-    MonthlyBudgetData data,
-  ) {
-    final List<Transaction> transactions = data.transactions;
-    if (transactions.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          Container(
-            color: AppColors.navy,
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppConstants.spacingMd,
-              vertical: AppConstants.spacingSm,
-            ),
-            child: Text(
-              'Transactions (${transactions.length})',
-              style: AppTextStyles.cardTitle.copyWith(color: AppColors.white),
-            ),
-          ),
-          ...transactions.asMap().entries.map((MapEntry<int, Transaction> e) {
-            final Transaction t = e.value;
-            return InkWell(
-              onTap: () async {
-                await showTransactionForm(
-                  context,
-                  orgId: orgId,
-                  initialTransaction: t,
-                );
-                if (!mounted) return;
-                ref.invalidate(
-                  monthlyBudgetDataProvider(orgId, data.year, data.month),
-                );
-              },
-              child: Container(
-                color: e.key.isEven ? AppColors.white : AppColors.lightGray,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppConstants.spacingMd,
-                  vertical: AppConstants.spacingSm,
-                ),
-                child: Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Text(
-                            t.merchant,
-                            style: AppTextStyles.body.copyWith(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          Text(
-                            '${t.category} / ${t.subcategory}',
-                            style: AppTextStyles.label.copyWith(fontSize: 11),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: AppConstants.spacingSm),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: <Widget>[
-                        Text(
-                          _formatCurrency(t.amount),
-                          style: AppTextStyles.body.copyWith(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
-                          ),
-                        ),
-                        Text(
-                          _transactionDate.format(t.date),
-                          style: AppTextStyles.label.copyWith(fontSize: 11),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }),
-        ],
       ),
     );
   }
