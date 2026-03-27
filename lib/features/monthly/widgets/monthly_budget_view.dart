@@ -202,7 +202,14 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
           const SizedBox(height: AppConstants.spacingSm),
         ],
         if (widget.isMobile)
-          _buildMobileCategoryGroups(groupedRows, data.categorySubtotals)
+          _buildMobileCategoryGroups(
+            Map<String, List<MonthlyRow>>.fromEntries(
+              groupedRows.entries.where(
+                (MapEntry<String, List<MonthlyRow>> e) => !isTransfer(e.key),
+              ),
+            ),
+            data.categorySubtotals,
+          )
         else ...<Widget>[
           _buildSummaryCharts(data),
           const SizedBox(height: AppConstants.spacingMd),
