@@ -23,7 +23,7 @@ final monthlyOrgIdProvider = AutoDisposeFutureProvider<String?>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef MonthlyOrgIdRef = AutoDisposeFutureProviderRef<String?>;
-String _$monthlyBudgetDataHash() => r'356564e3cd24d08f88283507c411f44ad7f2d01e';
+String _$monthlyBudgetDataHash() => r'4635d908741f20794302e30c2927998c0b5a737b';
 
 /// Copied from Dart SDK
 class _SystemHash {

@@ -37,6 +37,173 @@ Active task queue. Claude authors and scopes all tasks. Codex picks up `ready` t
 
 ---
 
+### TASK-022 · Missing miles panel on Monthly Budget View
+- **Status:** ready
+- **Depends on:** TASK-013
+- **What to build:**
+  On the desktop Monthly Budget View, show a collapsible panel (similar to the uncategorized panel) that flags Business and Healthcare transactions that are missing mileage data. Users can log miles inline or mark a transaction as "No Miles" to dismiss it.
+
+  **Database migration** — create `supabase/migrations/20260326000000_add_no_miles_to_transactions.sql`:
+  ```sql
+  alter table transactions add column if not exists no_miles boolean not null default false;
+  ```
+  Run this in the Supabase dashboard SQL editor.
+
+  **`lib/features/transactions/models/transaction.dart`** — add field:
+  ```dart
+  @JsonKey(name: 'no_miles') @Default(false) bool noMiles,
+  ```
+  Place it after `notes`. Re-run `build_runner` after this change.
+
+  **`lib/features/transactions/data/transaction_service.dart`** — add `'no_miles': transaction.noMiles` to both `insertTransaction` and `updateTransaction` maps.
+
+  **`lib/features/monthly/widgets/monthly_budget_view.dart`:**
+
+  1. Add state field: `bool _isMissingMilesExpanded = true;`
+
+  2. Add helper `_filterMissingMilesTransactions(MonthlyBudgetData data)`:
+     - Returns transactions where `category == 'Business' || category == 'Healthcare'`
+     - AND `noMiles == false`
+     - Filter client-side from `data.transactions`
+
+  3. Add `_buildMissingMilesPanel(BuildContext context, { required String orgId, required MonthlyBudgetData data, required List<Transaction> transactions })`:
+     - Returns `SizedBox.shrink()` if transactions is empty
+     - Same card/header pattern as `_buildUncategorizedPanel` (amber background `Color(0xFFFFF7E6)` → use `AppColors.amberFill` instead to visually distinguish)
+     - Header: "Missing Miles (N)" with chevron toggle
+     - Navy header row: Date | Merchant | Category | Amount | Miles
+     - Per row (alternating white/lightGray):
+       - Date, Merchant, Category/Subcategory, Amount (right-aligned)
+       - Miles column: a small `TextFormField` (width ~80px) for miles input + a round-trip checkbox icon toggle, and a green `IconButton(Icons.directions_car)` to save the trip, OR a grey `TextButton('No Miles')` that marks the transaction
+       - Tapping elsewhere on the row opens `showTransactionForm`
+     - Use a `Map<String, TextEditingController> _milesControllers` and `Map<String, bool> _roundTripStates` keyed by transaction ID for the inline inputs — initialize lazily in the build method
+     - On the car icon tap:
+       1. Parse miles from controller; if <= 0, show snackbar "Enter miles first"
+       2. Create a `MileageTrip` (same logic as transaction_form.dart: merchant as purpose, transaction date, bizPct, isRoundTrip from toggle, category = `'Business - Other'` or `'Healthcare'`)
+       3. Call `ref.read(mileageControllerProvider.notifier).saveTrip(trip)`
+       4. Call `ref.read(transactionControllerProvider.notifier).save(transaction.copyWith(noMiles: false), isEdit: true)` — noMiles stays false, trip is created
+       5. Invalidate `monthlyBudgetDataProvider`
+     - On "No Miles" tap:
+       1. Call `ref.read(transactionControllerProvider.notifier).save(transaction.copyWith(noMiles: true), isEdit: true)`
+       2. Invalidate `monthlyBudgetDataProvider`
+
+  4. In `_buildScaffold`, call `_buildMissingMilesPanel` between the uncategorized panel and `_buildDesktopTable` (desktop only). Add spacer if panel is non-empty.
+
+  5. In `_handleMonthChange` (or wherever `_isUncategorizedExpanded` is reset to true), also reset `_isMissingMilesExpanded = true`.
+
+  **Do NOT:**
+  - Touch mobile layout
+  - Add a new provider or network call — use `data.transactions` and existing controllers
+  - Modify `monthly_provider.dart`
+
+  **Run `build_runner` after the model change:**
+  ```
+  flutter pub run build_runner build --delete-conflicting-outputs
+  ```
+
+- **When done:** Change status to `ready-to-review`
+
+---
+
+### TASK-019 · Monthly subcategory transaction drill-down
+- **Status:** ready-to-review
+- **Depends on:** TASK-013
+- **What to build:**
+  On the desktop Monthly Budget View, each subcategory row should be expandable to show the individual transactions that make up its actual spend. Default state is collapsed.
+
+  **Behaviour:**
+  - Add a small chevron/arrow to the left of the subcategory name (inside the `flex: 3` cell, to the right of the edit pencil icon)
+  - Tapping the chevron expands an inline transaction list beneath the row (not a separate page or sheet)
+  - Expanded state shows each transaction as a sub-row with: Date | Merchant | Amount | Biz%
+  - Rows are read-only in this view — tapping a transaction row opens the existing `showTransactionForm` edit sheet
+  - Only one subcategory can be expanded at a time per category group (expanding another collapses the previous), OR allow multiple open — your call, keep it simple
+  - The expanded rows should be visually indented / slightly different background so they read as children of the subcategory row
+  - The transaction data is already loaded in `monthlyBudgetData` — use the `transactions` list that is currently only used to compute `actualByKey`. You will need to expose it from `MonthlyBudgetData` so the widget can access it.
+
+  **Files to modify:**
+  - `lib/features/monthly/presentation/providers/monthly_provider.dart` — add `transactions` field to `MonthlyBudgetData`, expose the raw transaction list
+  - `lib/features/monthly/widgets/monthly_budget_view.dart` — add expand/collapse state notifier, chevron icon, and transaction sub-rows in `_buildSectionTable`
+
+  **Do NOT:**
+  - Add a new provider or network call — transactions are already fetched
+  - Touch mobile layout
+  - Run `build_runner` (no `@riverpod` or `@freezed` changes needed)
+
+- **When done:** Change status to `ready-to-review`
+
+---
+
+### TASK-020 · Monthly uncategorized transactions panel
+- **Status:** ready
+- **Depends on:** TASK-019
+- **What to build:**
+  On the desktop Monthly Budget View, show a collapsible panel between the charts section and the budget table. The panel lists all transactions for the current month that landed in `Other / Uncategorized` (i.e. their original `category`/`subcategory` did not match any known budget row).
+
+  **Behaviour:**
+  - Panel is expanded by default when there are uncategorized transactions; hidden entirely when there are none
+  - Header row: "Uncategorized Transactions (N)" with a chevron toggle to collapse/expand
+  - Each row shows: Date | Merchant | Original Category / Subcategory | Amount
+  - Tapping a row opens the existing `showTransactionForm` edit sheet so the user can re-categorize
+  - After saving the form, the monthly data invalidates and the transaction disappears from this list if it now matches a known subcategory
+
+  **Data:**
+  - `MonthlyBudgetData` already has a `transactions` list (added in TASK-019). Filter it client-side: keep transactions whose `category + subcategory` key does NOT appear in any non-Uncategorized `MonthlyRow`. Do NOT add a new provider or network call.
+  - The catch-all key is `Other\x00Uncategorized` (built by `_budgetKey('Other', 'Uncategorized')` in the provider)
+
+  **Files to modify:**
+  - `lib/features/monthly/widgets/monthly_budget_view.dart` — add `_isUncategorizedExpanded` bool state (default true), add `_buildUncategorizedPanel` method, call it between the charts widget and `_buildDesktopTable`
+
+  **Do NOT:**
+  - Add a new provider or network call
+  - Touch mobile layout
+  - Run `build_runner`
+
+- **When done:** Change status to `ready-to-review`
+
+---
+
+### TASK-021 · Auto-categorization suggestions for uncategorized transactions
+- **Status:** ready-to-review
+- **Depends on:** TASK-020
+- **What to build:**
+  When the uncategorized panel (TASK-020) displays a Teller-synced transaction, automatically suggest a category/subcategory based on merchant history from past transactions. The user must confirm the suggestion before it is saved.
+
+  **How suggestions work:**
+  1. For each uncategorized transaction, normalize its merchant string: uppercase, strip all digits and punctuation, split on whitespace, take the first 4 tokens, rejoin as a prefix (e.g. `"CHEROKEE METRO CO UTIL 719-597-5080"` → `"CHEROKEE METRO CO UTIL"`).
+  2. Fetch the last 90 days of categorized transactions from Supabase (category != 'Uncategorized'). This is a one-time fetch when the uncategorized panel loads — add a new `@riverpod` provider `recentCategorizedTransactionsProvider(orgId)` that queries `transactions` with `date >= now - 90 days AND category != 'Uncategorized'`. This is the only allowed new provider/query.
+  3. For each history transaction, apply the same normalization to its merchant. If the normalized prefix matches the uncategorized transaction's prefix, count a vote for that `category/subcategory` pair.
+  4. The suggestion is the `category/subcategory` pair with the highest vote count. If there are no votes, show no suggestion.
+
+  **UI changes to the uncategorized panel row (built in TASK-020):**
+  - If a suggestion exists: show it inline as a muted label `"Suggested: Housing / Utilities - Water"` with a green checkmark `IconButton` to confirm
+  - Tapping the checkmark calls `TransactionController.save(transaction.copyWith(category: suggestion.category, subcategory: suggestion.subcategory), isEdit: true)` then invalidates `monthlyBudgetDataProvider`
+  - If no suggestion: row looks the same as TASK-020 (tap to open edit form)
+  - Tapping anywhere else on the row (not the checkmark) still opens `showTransactionForm` for manual categorization
+
+  **Normalization helper — add as a top-level function in `monthly_budget_view.dart`:**
+  ```dart
+  String _normalizeMerchant(String merchant) {
+    final String upper = merchant.toUpperCase();
+    final String stripped = upper.replaceAll(RegExp(r'[^A-Z ]'), '');
+    final List<String> tokens = stripped.split(' ').where((t) => t.isNotEmpty).toList();
+    return tokens.take(4).join(' ');
+  }
+  ```
+
+  **Files to modify:**
+  - `lib/features/transactions/presentation/providers/transaction_provider.dart` — add `recentCategorizedTransactionsProvider(orgId)` fetching last 90 days of non-Uncategorized transactions
+  - `lib/features/transactions/presentation/providers/transaction_provider.g.dart` — run `build_runner` after adding the provider
+  - `lib/features/monthly/widgets/monthly_budget_view.dart` — watch `recentCategorizedTransactionsProvider`, add `_normalizeMerchant`, add `_buildSuggestion(Transaction t, List<Transaction> history)` helper returning `({String category, String subcategory})?`, update the uncategorized panel row UI
+
+  **Do NOT:**
+  - Touch mobile layout
+  - Show suggestions for manually-entered transactions (only show for transactions where `category == 'Uncategorized' && subcategory == 'Uncategorized'`)
+
+- **Review feedback (sent back from ready-to-review):** The initial implementation scanned only `data.transactions` (current month). This is insufficient — most months will have no categorized history to match against. Rework the data source as specified above: add `recentCategorizedTransactionsProvider(orgId)` fetching the last 90 days of non-Uncategorized transactions, and use that as the matching corpus instead.
+
+- **When done:** Change status to `ready-to-review`
+
+---
+
 ## Phase 1 · Build (TASK-005 → TASK-009)
 
 Work through these in order. When you finish one task, immediately pick up the next one in this phase without waiting — unless the next task says it needs Claude's spec first. After TASK-009 is marked `ready-to-review`, **stop and wait for Claude to review all of Phase 1 before starting anything in Phase 2.**
@@ -331,6 +498,7 @@ TASK-010/011/012/013/015 can all run simultaneously. TASK-014 needs TASK-008 and
 | TASK-014 | Business Summary | TASK-008, TASK-009 | done |
 | TASK-015 | Receipt upload + management | TASK-008 | done |
 | TASK-018 | Teller bank integration | TASK-008, TASK-007 | ready-to-review |
+| TASK-019 | Monthly subcategory transaction drill-down | TASK-013 | ready-to-review |
 
 **Phase 2 is fully open. All specs written. Codex may pick up any `ready` task.**
 

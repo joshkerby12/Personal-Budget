@@ -14,6 +14,7 @@ type SyncRequest = {
   orgId?: string;
   enrollmentId?: string;
   initialSync?: boolean;
+  cronSecret?: string;
 };
 
 type TellerEnrollmentRow = {
@@ -42,8 +43,8 @@ Deno.serve(async (req) => {
 
   try {
     const admin = createAdminClient();
-    const auth = await authenticate(req, admin);
     const body = await parseBody(req);
+    const auth = await authenticate(req, admin, body);
 
     if (auth.kind === 'user') {
       if (!body.orgId) {
@@ -405,6 +406,7 @@ async function parseBody(req: Request): Promise<SyncRequest> {
       orgId: stringOrNull(payload.orgId) ?? undefined,
       enrollmentId: stringOrNull(payload.enrollmentId) ?? undefined,
       initialSync: payload.initialSync === true,
+      cronSecret: stringOrNull(payload.cronSecret) ?? undefined,
     };
   } catch (_) {
     return {};
@@ -414,11 +416,18 @@ async function parseBody(req: Request): Promise<SyncRequest> {
 async function authenticate(
   req: Request,
   admin: ReturnType<typeof createAdminClient>,
+  body: SyncRequest & { cronSecret?: string },
 ): Promise<AuthContext> {
+  // Allow cron jobs to authenticate via body secret (pg_net strips headers)
+  const cronSecret = Deno.env.get('CRON_SECRET');
+  if (cronSecret && body.cronSecret && body.cronSecret.trim() === cronSecret.trim()) {
+    return { kind: 'service' };
+  }
+
   const token = readBearerToken(req);
   const serviceRoleKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
 
-  if (token === serviceRoleKey) {
+  if (token.trim() === serviceRoleKey.trim()) {
     return { kind: 'service' };
   }
 

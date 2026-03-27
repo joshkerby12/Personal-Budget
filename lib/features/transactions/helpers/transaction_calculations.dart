@@ -9,6 +9,8 @@ double calculateBusinessAmount(double amount, double bizPct) => amount * bizPct;
 
 bool isIncome(String category) => category == 'Income';
 
+bool isTransfer(String category) => category == 'Transfers';
+
 /// Canonical display order for parent categories.
 /// Income first, then expenses in budget-priority order.
 const List<String> kCategoryOrder = <String>[
@@ -23,6 +25,7 @@ const List<String> kCategoryOrder = <String>[
   'Debt',
   'Business',
   'Giving',
+  'Transfers',
   'Other',
 ];
 
@@ -47,7 +50,7 @@ calculateTransactionSummary(List<Transaction> transactions) {
   for (final Transaction transaction in transactions) {
     if (isIncome(transaction.category)) {
       income += transaction.amount;
-    } else {
+    } else if (!isTransfer(transaction.category)) {
       expenses += transaction.amount;
       businessTotal += calculateBusinessAmount(
         transaction.amount,

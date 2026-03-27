@@ -18,7 +18,7 @@ import '../../presentation/widgets/transaction_form.dart';
 
 const Color _businessPurple = Color(0xFF8E44AD);
 final AutoDisposeStateProvider<int?> _monthFilterProvider =
-    StateProvider.autoDispose<int?>((Ref ref) => null);
+    StateProvider.autoDispose<int?>((Ref ref) => DateTime.now().month);
 final AutoDisposeStateProvider<String?> _categoryFilterProvider =
     StateProvider.autoDispose<String?>((Ref ref) => null);
 

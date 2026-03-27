@@ -183,6 +183,138 @@ class _TransactionsProviderElement
   TransactionFilter get filter => (origin as TransactionsProvider).filter;
 }
 
+String _$recentCategorizedTransactionsHash() =>
+    r'9bd82471b4b5e2fbf31696c9a5920a03c0eecf7f';
+
+/// See also [recentCategorizedTransactions].
+@ProviderFor(recentCategorizedTransactions)
+const recentCategorizedTransactionsProvider =
+    RecentCategorizedTransactionsFamily();
+
+/// See also [recentCategorizedTransactions].
+class RecentCategorizedTransactionsFamily
+    extends Family<AsyncValue<List<Transaction>>> {
+  /// See also [recentCategorizedTransactions].
+  const RecentCategorizedTransactionsFamily();
+
+  /// See also [recentCategorizedTransactions].
+  RecentCategorizedTransactionsProvider call(String orgId) {
+    return RecentCategorizedTransactionsProvider(orgId);
+  }
+
+  @override
+  RecentCategorizedTransactionsProvider getProviderOverride(
+    covariant RecentCategorizedTransactionsProvider provider,
+  ) {
+    return call(provider.orgId);
+  }
+
+  static const Iterable<ProviderOrFamily>? _dependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get dependencies => _dependencies;
+
+  static const Iterable<ProviderOrFamily>? _allTransitiveDependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get allTransitiveDependencies =>
+      _allTransitiveDependencies;
+
+  @override
+  String? get name => r'recentCategorizedTransactionsProvider';
+}
+
+/// See also [recentCategorizedTransactions].
+class RecentCategorizedTransactionsProvider
+    extends AutoDisposeFutureProvider<List<Transaction>> {
+  /// See also [recentCategorizedTransactions].
+  RecentCategorizedTransactionsProvider(String orgId)
+    : this._internal(
+        (ref) => recentCategorizedTransactions(
+          ref as RecentCategorizedTransactionsRef,
+          orgId,
+        ),
+        from: recentCategorizedTransactionsProvider,
+        name: r'recentCategorizedTransactionsProvider',
+        debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+            ? null
+            : _$recentCategorizedTransactionsHash,
+        dependencies: RecentCategorizedTransactionsFamily._dependencies,
+        allTransitiveDependencies:
+            RecentCategorizedTransactionsFamily._allTransitiveDependencies,
+        orgId: orgId,
+      );
+
+  RecentCategorizedTransactionsProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.orgId,
+  }) : super.internal();
+
+  final String orgId;
+
+  @override
+  Override overrideWith(
+    FutureOr<List<Transaction>> Function(
+      RecentCategorizedTransactionsRef provider,
+    )
+    create,
+  ) {
+    return ProviderOverride(
+      origin: this,
+      override: RecentCategorizedTransactionsProvider._internal(
+        (ref) => create(ref as RecentCategorizedTransactionsRef),
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        orgId: orgId,
+      ),
+    );
+  }
+
+  @override
+  AutoDisposeFutureProviderElement<List<Transaction>> createElement() {
+    return _RecentCategorizedTransactionsProviderElement(this);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is RecentCategorizedTransactionsProvider &&
+        other.orgId == orgId;
+  }
+
+  @override
+  int get hashCode {
+    var hash = _SystemHash.combine(0, runtimeType.hashCode);
+    hash = _SystemHash.combine(hash, orgId.hashCode);
+
+    return _SystemHash.finish(hash);
+  }
+}
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+mixin RecentCategorizedTransactionsRef
+    on AutoDisposeFutureProviderRef<List<Transaction>> {
+  /// The parameter `orgId` of this provider.
+  String get orgId;
+}
+
+class _RecentCategorizedTransactionsProviderElement
+    extends AutoDisposeFutureProviderElement<List<Transaction>>
+    with RecentCategorizedTransactionsRef {
+  _RecentCategorizedTransactionsProviderElement(super.provider);
+
+  @override
+  String get orgId => (origin as RecentCategorizedTransactionsProvider).orgId;
+}
+
 String _$transactionControllerHash() =>
     r'33dee52ab2e10156fd9f539f13589f0f0d2e0b5b';
 

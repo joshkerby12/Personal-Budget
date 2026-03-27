@@ -257,45 +257,56 @@ class _SummaryStatCards extends StatelessWidget {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         if (constraints.maxWidth < 980) {
-          final double width =
-              (constraints.maxWidth - AppConstants.spacingSm) / 2;
-          return Wrap(
-            spacing: AppConstants.spacingSm,
-            runSpacing: AppConstants.spacingSm,
+          return Column(
             children: <Widget>[
-              _SummaryStatCard(
-                width: width,
-                label: 'Income',
-                total: summary.yearIncome,
-                month: summary.monthIncome,
-                accent: AppColors.green,
-                valueColor: AppColors.green,
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: _SummaryStatCard(
+                      label: 'Income',
+                      total: summary.yearIncome,
+                      month: summary.monthIncome,
+                      accent: AppColors.green,
+                      valueColor: AppColors.green,
+                    ),
+                  ),
+                  const SizedBox(width: AppConstants.spacingSm),
+                  Expanded(
+                    child: _SummaryStatCard(
+                      label: 'Expenses',
+                      total: summary.yearExpenses,
+                      month: summary.monthExpenses,
+                      accent: AppColors.teal,
+                      valueColor: AppColors.red,
+                    ),
+                  ),
+                ],
               ),
-              _SummaryStatCard(
-                width: width,
-                label: 'Expenses',
-                total: summary.yearExpenses,
-                month: summary.monthExpenses,
-                accent: AppColors.teal,
-                valueColor: AppColors.red,
-              ),
-              _SummaryStatCard(
-                width: width,
-                label: 'Net',
-                total: summary.yearNet,
-                month: summary.monthNet,
-                accent: AppColors.amber,
-                valueColor: summary.yearNet >= 0
-                    ? AppColors.green
-                    : AppColors.red,
-              ),
-              _SummaryStatCard(
-                width: width,
-                label: 'Business',
-                total: summary.yearBusiness,
-                month: summary.monthBusiness,
-                accent: _businessPurple,
-                valueColor: AppColors.textMuted,
+              const SizedBox(height: AppConstants.spacingSm),
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: _SummaryStatCard(
+                      label: 'Net',
+                      total: summary.yearNet,
+                      month: summary.monthNet,
+                      accent: AppColors.amber,
+                      valueColor: summary.yearNet >= 0
+                          ? AppColors.green
+                          : AppColors.red,
+                    ),
+                  ),
+                  const SizedBox(width: AppConstants.spacingSm),
+                  Expanded(
+                    child: _SummaryStatCard(
+                      label: 'Business',
+                      total: summary.yearBusiness,
+                      month: summary.monthBusiness,
+                      accent: _businessPurple,
+                      valueColor: AppColors.textMuted,
+                    ),
+                  ),
+                ],
               ),
             ],
           );
@@ -358,7 +369,6 @@ class _SummaryStatCard extends StatelessWidget {
     required this.month,
     required this.accent,
     required this.valueColor,
-    this.width,
   });
 
   final String label;
@@ -366,7 +376,6 @@ class _SummaryStatCard extends StatelessWidget {
   final double month;
   final Color accent;
   final Color valueColor;
-  final double? width;
 
   @override
   Widget build(BuildContext context) {
@@ -398,11 +407,7 @@ class _SummaryStatCard extends StatelessWidget {
       ),
     );
 
-    if (width == null) {
-      return card;
-    }
-
-    return SizedBox(width: width, child: card);
+    return card;
   }
 }
 
@@ -698,111 +703,118 @@ class _CategoryTotalsTable extends StatelessWidget {
                 ),
               )
             else
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(minWidth: 980),
-                  child: Column(
-                    children: <Widget>[
-                      Container(
-                        color: AppColors.navy,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppConstants.spacingMd,
-                          vertical: AppConstants.spacingSm,
-                        ),
-                        child: const Row(
-                          children: <Widget>[
-                            _HeaderCell('Category', flex: 3),
-                            _HeaderCell('Actual (\$)', flex: 2),
-                            _HeaderCell('Budget/mo (\$)', flex: 2),
-                            _HeaderCell('Business (\$)', flex: 2),
-                            _HeaderCell('Biz%', flex: 1),
-                          ],
-                        ),
-                      ),
-                      ...rows.asMap().entries.map((
-                        MapEntry<int, _CategoryTableRowData> entry,
-                      ) {
-                        final bool isEven = entry.key.isEven;
-                        final _CategoryTableRowData row = entry.value;
-                        return Container(
-                          color: isEven ? AppColors.white : AppColors.lightGray,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: AppConstants.spacingMd,
-                            vertical: AppConstants.spacingSm,
+              LayoutBuilder(
+                builder: (BuildContext context, BoxConstraints constraints) {
+                  final double tableWidth = math.max(980, constraints.maxWidth);
+                  return SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: SizedBox(
+                      width: tableWidth,
+                      child: Column(
+                        children: <Widget>[
+                          Container(
+                            color: AppColors.navy,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppConstants.spacingMd,
+                              vertical: AppConstants.spacingSm,
+                            ),
+                            child: const Row(
+                              children: <Widget>[
+                                _HeaderCell('Category', flex: 3),
+                                _HeaderCell('Actual (\$)', flex: 2),
+                                _HeaderCell('Budget/mo (\$)', flex: 2),
+                                _HeaderCell('Business (\$)', flex: 2),
+                                _HeaderCell('Biz%', flex: 1),
+                              ],
+                            ),
                           ),
-                          child: Row(
-                            children: <Widget>[
-                              _BodyCell(row.category, flex: 3),
-                              _BodyCell(
-                                _currencyFormat.format(row.actual),
-                                flex: 2,
-                                alignRight: true,
+                          ...rows.asMap().entries.map((
+                            MapEntry<int, _CategoryTableRowData> entry,
+                          ) {
+                            final bool isEven = entry.key.isEven;
+                            final _CategoryTableRowData row = entry.value;
+                            return Container(
+                              color: isEven
+                                  ? AppColors.white
+                                  : AppColors.lightGray,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppConstants.spacingMd,
+                                vertical: AppConstants.spacingSm,
                               ),
-                              _BodyCell(
-                                row.budget == null
-                                    ? '—'
-                                    : _currencyFormat.format(row.budget),
-                                flex: 2,
-                                alignRight: true,
+                              child: Row(
+                                children: <Widget>[
+                                  _BodyCell(row.category, flex: 3),
+                                  _BodyCell(
+                                    _currencyFormat.format(row.actual),
+                                    flex: 2,
+                                    alignRight: true,
+                                  ),
+                                  _BodyCell(
+                                    row.budget == null
+                                        ? '—'
+                                        : _currencyFormat.format(row.budget),
+                                    flex: 2,
+                                    alignRight: true,
+                                  ),
+                                  _BodyCell(
+                                    _currencyFormat.format(row.business),
+                                    flex: 2,
+                                    alignRight: true,
+                                  ),
+                                  _BodyCell(
+                                    row.actual == 0
+                                        ? '—'
+                                        : '${((row.business / row.actual) * 100).toStringAsFixed(0)}%',
+                                    flex: 1,
+                                    alignRight: true,
+                                  ),
+                                ],
                               ),
-                              _BodyCell(
-                                _currencyFormat.format(row.business),
-                                flex: 2,
-                                alignRight: true,
-                              ),
-                              _BodyCell(
-                                row.actual == 0
-                                    ? '—'
-                                    : '${((row.business / row.actual) * 100).toStringAsFixed(0)}%',
-                                flex: 1,
-                                alignRight: true,
-                              ),
-                            ],
-                          ),
-                        );
-                      }),
-                      Container(
-                        color: AppColors.tealLight,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppConstants.spacingMd,
-                          vertical: AppConstants.spacingSm,
-                        ),
-                        child: Row(
-                          children: <Widget>[
-                            Expanded(
-                              flex: 3,
-                              child: Text(
-                                'Totals',
-                                style: AppTextStyles.body.copyWith(
-                                  fontWeight: FontWeight.w700,
+                            );
+                          }),
+                          Container(
+                            color: AppColors.tealLight,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppConstants.spacingMd,
+                              vertical: AppConstants.spacingSm,
+                            ),
+                            child: Row(
+                              children: <Widget>[
+                                Expanded(
+                                  flex: 3,
+                                  child: Text(
+                                    'Totals',
+                                    style: AppTextStyles.body.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
                                 ),
-                              ),
+                                _FooterCell(
+                                  _currencyFormat.format(totalActual),
+                                  flex: 2,
+                                ),
+                                _FooterCell(
+                                  _currencyFormat.format(totalBudget),
+                                  flex: 2,
+                                ),
+                                _FooterCell(
+                                  _currencyFormat.format(totalBusiness),
+                                  flex: 2,
+                                ),
+                                _FooterCell(
+                                  totalActual == 0
+                                      ? '—'
+                                      : '${((totalBusiness / totalActual) * 100).toStringAsFixed(0)}%',
+                                  flex: 1,
+                                ),
+                              ],
                             ),
-                            _FooterCell(
-                              _currencyFormat.format(totalActual),
-                              flex: 2,
-                            ),
-                            _FooterCell(
-                              _currencyFormat.format(totalBudget),
-                              flex: 2,
-                            ),
-                            _FooterCell(
-                              _currencyFormat.format(totalBusiness),
-                              flex: 2,
-                            ),
-                            _FooterCell(
-                              totalActual == 0
-                                  ? '—'
-                                  : '${((totalBusiness / totalActual) * 100).toStringAsFixed(0)}%',
-                              flex: 1,
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                ),
+                    ),
+                  );
+                },
               ),
           ],
         ),

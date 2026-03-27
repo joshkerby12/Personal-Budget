@@ -25,6 +25,32 @@ Future<List<Transaction>> transactions(
 }
 
 @riverpod
+Future<List<Transaction>> recentCategorizedTransactions(
+  Ref ref,
+  String orgId,
+) async {
+  final DateTime cutoff = DateTime.now().toUtc().subtract(
+    const Duration(days: 90),
+  );
+  final String cutoffDate = _dateOnly(cutoff);
+
+  final List<dynamic> rows = await ref
+      .read(supabaseClientProvider)
+      .from('transactions')
+      .select()
+      .eq('org_id', orgId)
+      .gte('date', cutoffDate)
+      .neq('category', 'Uncategorized')
+      .order('date', ascending: false)
+      .order('created_at', ascending: false);
+
+  return rows
+      .cast<Map<String, dynamic>>()
+      .map(Transaction.fromJson)
+      .toList(growable: false);
+}
+
+@riverpod
 class TransactionController extends _$TransactionController {
   @override
   AsyncValue<void> build() => const AsyncData<void>(null);
@@ -64,3 +90,5 @@ class TransactionController extends _$TransactionController {
     }
   }
 }
+
+String _dateOnly(DateTime date) => date.toIso8601String().split('T').first;

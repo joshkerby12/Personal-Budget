@@ -21,7 +21,7 @@ enum _BizFilter { all, personalOnly, businessOnly }
 final AutoDisposeStateProvider<String> _searchQueryProvider =
     StateProvider.autoDispose<String>((Ref ref) => '');
 final AutoDisposeStateProvider<int?> _monthFilterProvider =
-    StateProvider.autoDispose<int?>((Ref ref) => null);
+    StateProvider.autoDispose<int?>((Ref ref) => DateTime.now().month);
 final AutoDisposeStateProvider<String?> _categoryFilterProvider =
     StateProvider.autoDispose<String?>((Ref ref) => null);
 final AutoDisposeStateProvider<_BizFilter> _bizFilterProvider =

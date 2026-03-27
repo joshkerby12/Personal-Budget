@@ -69,19 +69,10 @@ Future<MonthlyBudgetData> monthlyBudgetData(
       .order('category', ascending: true)
       .order('subcategory', ascending: true);
 
-  // Fetch all org categories so future months show all rows even with no data
-  final Future<List<dynamic>> categoriesFuture = client
-      .from('categories')
-      .select('parent_category, subcategory')
-      .eq('org_id', orgId)
-      .order('parent_category', ascending: true)
-      .order('subcategory', ascending: true);
-
   final List<dynamic> results = await Future.wait<dynamic>(<Future<dynamic>>[
     transactionsFuture,
     globalDefaultsFuture,
     monthOverridesFuture,
-    categoriesFuture,
   ]);
 
   final List<Transaction> transactions = (results[0] as List<dynamic>)
@@ -98,9 +89,6 @@ Future<MonthlyBudgetData> monthlyBudgetData(
       .cast<Map<String, dynamic>>()
       .map(BudgetDefault.fromJson)
       .toList(growable: false);
-
-  final List<Map<String, dynamic>> categoryRows =
-      (results[3] as List<dynamic>).cast<Map<String, dynamic>>();
 
   final Map<String, BudgetDefault> globalByKey = <String, BudgetDefault>{
     for (final BudgetDefault row in globalDefaults)
@@ -125,21 +113,35 @@ Future<MonthlyBudgetData> monthlyBudgetData(
     accumulator.add(transaction.amount, transaction.bizPct);
   }
 
-  // Collect all keys (deduplicated), then sort by canonical category order.
-  // categoryRows is already ordered by sort_order within each parent, so
-  // subcategory order within a group is preserved by insertion order.
+  // Use globalDefaults (budgets WHERE month IS NULL) as the source of truth
+  // for what subcategories exist. This matches exactly what the Settings page
+  // manages. Deleted subcategories won't be in globalByKey so they're excluded.
+  const String catchAllCategory = 'Other';
+  const String catchAllSubcategory = 'Uncategorized';
+  final String catchAllKey = _budgetKey(catchAllCategory, catchAllSubcategory);
+
   final LinkedHashSet<String> seenKeys = LinkedHashSet<String>();
-  for (final Map<String, dynamic> row in categoryRows) {
-    final String parent = row['parent_category'] as String;
-    final String sub = row['subcategory'] as String;
-    if (!isIncome(parent)) {
-      seenKeys.add(_budgetKey(parent, sub));
+  for (final BudgetDefault d in globalDefaults) {
+    seenKeys.add(_budgetKey(d.category, d.subcategory));
+  }
+  // Always include the catch-all and Transfer subcategories
+  seenKeys.add(catchAllKey);
+  seenKeys.add(_budgetKey('Transfers', 'Credit Card Payment'));
+  seenKeys.add(_budgetKey('Transfers', 'Account Transfer'));
+  // Reroute transactions whose category/subcategory isn't in globalDefaults
+  // into the catch-all bucket
+  for (final Transaction t in transactions) {
+    final String key = _budgetKey(t.category, t.subcategory);
+    if (!seenKeys.contains(key)) {
+      final _ActualAccumulator acc =
+          actualByKey.putIfAbsent(catchAllKey, _ActualAccumulator.new);
+      acc.add(t.amount, t.bizPct);
     }
   }
-  seenKeys
-    ..addAll(globalByKey.keys)
-    ..addAll(overrideByKey.keys)
-    ..addAll(actualByKey.keys);
+  // Include month override keys (in case they add new rows)
+  seenKeys.addAll(overrideByKey.keys.where(seenKeys.contains));
+  // Include actual keys only for known subcategories
+  seenKeys.addAll(actualByKey.keys.where(seenKeys.contains));
 
   final List<String> allKeys = seenKeys.toList(growable: false);
   final Map<String, int> insertionIndex = <String, int>{
@@ -208,7 +210,7 @@ Future<MonthlyBudgetData> monthlyBudgetData(
     if (isIncome(t.category)) monthIncome += t.amount;
   }
   for (final MonthlyRow row in rows) {
-    totalBudgeted += row.budget;
+    if (!isTransfer(row.category)) totalBudgeted += row.budget;
   }
 
   return MonthlyBudgetData(
@@ -216,6 +218,7 @@ Future<MonthlyBudgetData> monthlyBudgetData(
     month: month,
     hasCustomBudgets: monthOverrides.isNotEmpty,
     rows: rows,
+    transactions: transactions,
     categorySubtotals: subtotals,
     monthIncome: monthIncome,
     totalBudgeted: totalBudgeted,
@@ -287,6 +290,7 @@ class MonthlyBudgetData {
     required this.month,
     required this.hasCustomBudgets,
     required this.rows,
+    required this.transactions,
     required this.categorySubtotals,
     required this.monthIncome,
     required this.totalBudgeted,
@@ -296,12 +300,16 @@ class MonthlyBudgetData {
   final int month;
   final bool hasCustomBudgets;
   final List<MonthlyRow> rows;
+  final List<Transaction> transactions;
   final Map<String, ({double budget, double actual, double business})>
   categorySubtotals;
+
   /// Sum of income transactions for this month (0 if none yet)
   final double monthIncome;
+
   /// Sum of all budgeted expense amounts for this month
   final double totalBudgeted;
+
   /// True when total budgeted expenses exceed known income for the month
   bool get isOverBudget => monthIncome > 0 && totalBudgeted > monthIncome;
 }
