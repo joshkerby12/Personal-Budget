@@ -8,15 +8,17 @@ echo "TELLER_APP_ID=$TELLER_APP_ID" >> .env
 
 # Install Flutter
 export FLUTTER_VERSION="3.41.2"
-export FLUTTER_HOME="$HOME/flutter"
+export FLUTTER_HOME="/vercel/flutter"
+
+git config --global --add safe.directory "$FLUTTER_HOME"
 
 if [ ! -d "$FLUTTER_HOME" ]; then
   curl -sL "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${FLUTTER_VERSION}-stable.tar.xz" \
-    | tar xJ -C "$HOME"
+    | tar xJ -C "/vercel"
 fi
 
 export PATH="$FLUTTER_HOME/bin:$PATH"
 
-flutter config --no-analytics
+flutter config --no-analytics --suppress-analytics
 flutter pub get
 flutter build web --release --base-href /
