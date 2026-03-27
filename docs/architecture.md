@@ -160,7 +160,7 @@ lib/features/[feature]/
 
 - **Remote git repo** — created at `git@github.com:joshkerby12/Personal-Budget.git`
 - **Email confirmation** — currently disabled in Supabase Auth for development. Re-enable before production launch.
-- **Hosting** — Flutter web build deployed via GitHub Pages (workflow already in place). Confirm custom domain if desired.
+- **Hosting** — Flutter web build deployed via Vercel (GitHub integration, no Actions). `vercel.json` + `build.sh` at repo root. Set `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `TELLER_APP_ID` in Vercel dashboard environment variables.
 
 ---
 
