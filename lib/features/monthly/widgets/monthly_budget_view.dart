@@ -2,11 +2,14 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/error_view.dart';
+import '../../mileage/models/mileage_trip.dart';
+import '../../mileage/presentation/providers/mileage_provider.dart';
 import '../../settings/data/settings_service.dart';
 import '../../settings/models/budget_default.dart';
 import '../../settings/presentation/providers/settings_provider.dart';
@@ -29,6 +32,7 @@ const List<Color> _categoryPalette = <Color>[
   Color(0xFF7D6608),
   Color(0xFF1F618D),
 ];
+final Uuid _uuid = const Uuid();
 
 String _normalizeMerchant(String merchant) {
   final String upper = merchant.toUpperCase();
@@ -71,6 +75,10 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
   TextEditingController? _inlineBizPctController;
   double? _lastMonthActual;
   bool _isUncategorizedExpanded = true;
+  bool _isMissingMilesExpanded = true;
+  final Map<String, TextEditingController> _milesControllers =
+      <String, TextEditingController>{};
+  final Map<String, bool> _roundTripStates = <String, bool>{};
 
   late final int _selectedYear;
 
@@ -97,6 +105,7 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
     _inlineEditingKeyNotifier.dispose();
     _inlineController?.dispose();
     _inlineBizPctController?.dispose();
+    _disposeMilesControllers();
     super.dispose();
   }
 
@@ -147,7 +156,9 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
     final Map<String, List<MonthlyRow>> groupedRows = _groupRows(data.rows);
 
     // Auto-collapse all categories on mobile if none have been manually toggled
-    if (widget.isMobile && _collapsedCategoriesNotifier.value.isEmpty && groupedRows.isNotEmpty) {
+    if (widget.isMobile &&
+        _collapsedCategoriesNotifier.value.isEmpty &&
+        groupedRows.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           _collapsedCategoriesNotifier.value = groupedRows.keys.toSet();
@@ -156,6 +167,8 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
     }
     final List<Transaction> uncategorizedTransactions =
         _filterUncategorizedTransactions(data);
+    final List<Transaction> missingMilesTransactions =
+        _filterMissingMilesTransactions(data);
     final AsyncValue<List<Transaction>> historyAsync =
         uncategorizedTransactions.isEmpty
         ? const AsyncData<List<Transaction>>(<Transaction>[])
@@ -228,6 +241,14 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
             suggestionHistory: suggestionHistory,
           ),
           if (uncategorizedTransactions.isNotEmpty)
+            const SizedBox(height: AppConstants.spacingMd),
+          _buildMissingMilesPanel(
+            context,
+            orgId: orgId,
+            data: data,
+            transactions: missingMilesTransactions,
+          ),
+          if (missingMilesTransactions.isNotEmpty)
             const SizedBox(height: AppConstants.spacingMd),
           _buildDesktopTable(orgId, data, groupedRows, data.categorySubtotals),
         ],
@@ -1386,7 +1407,119 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
                     horizontal: AppConstants.spacingMd,
                     vertical: AppConstants.spacingXs,
                   ),
-                  child: Row(
+                  child: widget.isMobile
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: <Widget>[
+                            Row(
+                              children: <Widget>[
+                                Expanded(
+                                  child: Text(
+                                    merchant,
+                                    style: AppTextStyles.body.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                Text(
+                                  _formatCurrency(transaction.amount),
+                                  style: AppTextStyles.body.copyWith(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Row(
+                              children: <Widget>[
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: <Widget>[
+                                      Text(
+                                        '${_transactionDate.format(transaction.date)} · $category / $subcategory',
+                                        style: AppTextStyles.label.copyWith(
+                                          fontSize: 11,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      if (suggestion != null)
+                                        Text(
+                                          'Suggested: ${suggestion.category} / ${suggestion.subcategory}',
+                                          style: AppTextStyles.label.copyWith(
+                                            fontSize: 11,
+                                            color: AppColors.teal,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                                if (suggestion != null)
+                                  IconButton(
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(
+                                      minWidth: 28,
+                                      minHeight: 28,
+                                    ),
+                                    tooltip: 'Apply suggestion',
+                                    icon: const Icon(
+                                      Icons.check_circle_outline,
+                                      size: 20,
+                                      color: AppColors.green,
+                                    ),
+                                    onPressed: () async {
+                                      final ScaffoldMessengerState messenger =
+                                          ScaffoldMessenger.of(context);
+                                      try {
+                                        await ref
+                                            .read(
+                                              transactionControllerProvider
+                                                  .notifier,
+                                            )
+                                            .save(
+                                              transaction.copyWith(
+                                                category: suggestion.category,
+                                                subcategory:
+                                                    suggestion.subcategory,
+                                              ),
+                                              isEdit: true,
+                                            );
+                                        if (!mounted) return;
+                                        ref.invalidate(
+                                          monthlyBudgetDataProvider(
+                                            orgId,
+                                            data.year,
+                                            data.month,
+                                          ),
+                                        );
+                                        messenger.showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                              'Applied: ${suggestion.category} / ${suggestion.subcategory}',
+                                            ),
+                                          ),
+                                        );
+                                      } catch (_) {
+                                        if (!mounted) return;
+                                        messenger.showSnackBar(
+                                          const SnackBar(
+                                            content: Text(
+                                              'Unable to apply suggestion.',
+                                            ),
+                                          ),
+                                        );
+                                      }
+                                    },
+                                  ),
+                              ],
+                            ),
+                          ],
+                        )
+                      : Row(
                     children: <Widget>[
                       _DesktopBodyCell(
                         _transactionDate.format(transaction.date),
@@ -1495,6 +1628,227 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
                               ),
                             ],
                           ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMissingMilesPanel(
+    BuildContext context, {
+    required String orgId,
+    required MonthlyBudgetData data,
+    required List<Transaction> transactions,
+  }) {
+    if (transactions.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: <Widget>[
+          InkWell(
+            onTap: () {
+              setState(() {
+                _isMissingMilesExpanded = !_isMissingMilesExpanded;
+              });
+            },
+            child: Container(
+              color: AppColors.amberFill,
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppConstants.spacingMd,
+                vertical: AppConstants.spacingSm,
+              ),
+              child: Row(
+                children: <Widget>[
+                  Icon(
+                    _isMissingMilesExpanded
+                        ? Icons.keyboard_arrow_down
+                        : Icons.keyboard_arrow_right,
+                    size: 18,
+                    color: AppColors.text,
+                  ),
+                  const SizedBox(width: AppConstants.spacingXs),
+                  Expanded(
+                    child: Text(
+                      'Missing Miles (${transactions.length})',
+                      style: AppTextStyles.cardTitle.copyWith(fontSize: 14),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (_isMissingMilesExpanded) ...<Widget>[
+            Container(
+              color: AppColors.navy,
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppConstants.spacingMd,
+                vertical: AppConstants.spacingXs,
+              ),
+              child: const Row(
+                children: <Widget>[
+                  _DesktopHeaderCell('Date', flex: 2),
+                  _DesktopHeaderCell('Merchant', flex: 4),
+                  _DesktopHeaderCell('Category', flex: 3),
+                  _DesktopHeaderCell('Amount', flex: 2, alignRight: true),
+                  _DesktopHeaderCell('Miles', flex: 4, alignRight: true),
+                ],
+              ),
+            ),
+            ...transactions.asMap().entries.map((MapEntry<int, Transaction> e) {
+              final Transaction transaction = e.value;
+              final TextEditingController milesController = _milesControllers
+                  .putIfAbsent(transaction.id, () => TextEditingController());
+              final bool isRoundTrip = _roundTripStates.putIfAbsent(
+                transaction.id,
+                () => false,
+              );
+              final String merchant = transaction.merchant.trim().isEmpty
+                  ? '—'
+                  : transaction.merchant;
+              final String category = transaction.category.trim().isEmpty
+                  ? '—'
+                  : transaction.category;
+              final String subcategory = transaction.subcategory.trim().isEmpty
+                  ? '—'
+                  : transaction.subcategory;
+
+              return InkWell(
+                onTap: () async {
+                  await showTransactionForm(
+                    context,
+                    orgId: orgId,
+                    initialTransaction: transaction,
+                  );
+                  if (!mounted) {
+                    return;
+                  }
+                  ref.invalidate(
+                    monthlyBudgetDataProvider(orgId, data.year, data.month),
+                  );
+                },
+                child: Container(
+                  color: e.key.isEven ? AppColors.white : AppColors.lightGray,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppConstants.spacingMd,
+                    vertical: AppConstants.spacingXs,
+                  ),
+                  child: Row(
+                    children: <Widget>[
+                      _DesktopBodyCell(
+                        _transactionDate.format(transaction.date),
+                        flex: 2,
+                      ),
+                      _DesktopBodyCell(merchant, flex: 4),
+                      Expanded(
+                        flex: 3,
+                        child: Text(
+                          '$category / $subcategory',
+                          style: AppTextStyles.body.copyWith(fontSize: 12),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      _DesktopBodyCell(
+                        _formatCurrency(transaction.amount),
+                        flex: 2,
+                        alignRight: true,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      Expanded(
+                        flex: 4,
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: Wrap(
+                            spacing: AppConstants.spacingXs,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: <Widget>[
+                              SizedBox(
+                                width: 80,
+                                child: TextFormField(
+                                  controller: milesController,
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
+                                  textAlign: TextAlign.right,
+                                  decoration: const InputDecoration(
+                                    isDense: true,
+                                    hintText: 'mi',
+                                    contentPadding: EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 8,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                tooltip: 'Round trip',
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(
+                                  minWidth: 24,
+                                  minHeight: 24,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _roundTripStates[transaction.id] =
+                                        !isRoundTrip;
+                                  });
+                                },
+                                icon: Icon(
+                                  isRoundTrip
+                                      ? Icons.check_box
+                                      : Icons.check_box_outline_blank,
+                                  size: 18,
+                                  color: AppColors.navy,
+                                ),
+                              ),
+                              IconButton(
+                                tooltip: 'Log mileage trip',
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(
+                                  minWidth: 24,
+                                  minHeight: 24,
+                                ),
+                                icon: const Icon(
+                                  Icons.directions_car,
+                                  size: 18,
+                                  color: AppColors.green,
+                                ),
+                                onPressed: () => _saveMissingMilesTrip(
+                                  context,
+                                  orgId: orgId,
+                                  data: data,
+                                  transaction: transaction,
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: () => _markNoMiles(
+                                  context,
+                                  orgId: orgId,
+                                  data: data,
+                                  transaction: transaction,
+                                ),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: AppColors.textMuted,
+                                  minimumSize: const Size(0, 24),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: AppConstants.spacingXs,
+                                  ),
+                                ),
+                                child: const Text('No Miles'),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ],
@@ -1813,6 +2167,8 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
     _expandedSubcategoryKeysNotifier.value = <String>{};
     _collapsedCategoriesNotifier.value = <String>{};
     _isUncategorizedExpanded = true;
+    _isMissingMilesExpanded = true;
+    _disposeMilesControllers();
     _selectedMonthNotifier.value = month;
   }
 
@@ -2163,11 +2519,110 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
     _controllers.clear();
   }
 
+  void _disposeMilesControllers() {
+    for (final TextEditingController controller in _milesControllers.values) {
+      controller.dispose();
+    }
+    _milesControllers.clear();
+    _roundTripStates.clear();
+  }
+
+  Future<void> _saveMissingMilesTrip(
+    BuildContext context, {
+    required String orgId,
+    required MonthlyBudgetData data,
+    required Transaction transaction,
+  }) async {
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    final TextEditingController? controller = _milesControllers[transaction.id];
+    final double miles = double.tryParse(controller?.text.trim() ?? '') ?? 0;
+    if (miles <= 0) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Enter miles first')),
+      );
+      return;
+    }
+
+    final MileageTrip trip = MileageTrip(
+      id: _uuid.v4(),
+      orgId: transaction.orgId,
+      createdBy: transaction.createdBy,
+      date: transaction.date,
+      purpose: transaction.merchant.trim().isEmpty
+          ? 'Mileage Trip'
+          : transaction.merchant.trim(),
+      fromAddress: '',
+      toAddress: '',
+      oneWayMiles: miles,
+      isRoundTrip: _roundTripStates[transaction.id] ?? false,
+      bizPct: transaction.bizPct,
+      category: transaction.category == 'Business'
+          ? 'Business - Other'
+          : 'Healthcare',
+      createdAt: DateTime.now(),
+    );
+
+    try {
+      await ref.read(mileageControllerProvider.notifier).saveTrip(trip);
+      await ref
+          .read(transactionControllerProvider.notifier)
+          .save(transaction.copyWith(noMiles: false), isEdit: true);
+
+      if (!mounted) {
+        return;
+      }
+      ref.invalidate(monthlyBudgetDataProvider(orgId, data.year, data.month));
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Unable to save miles right now.')),
+      );
+    }
+  }
+
+  Future<void> _markNoMiles(
+    BuildContext context, {
+    required String orgId,
+    required MonthlyBudgetData data,
+    required Transaction transaction,
+  }) async {
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref
+          .read(transactionControllerProvider.notifier)
+          .save(transaction.copyWith(noMiles: true), isEdit: true);
+
+      if (!mounted) {
+        return;
+      }
+      ref.invalidate(monthlyBudgetDataProvider(orgId, data.year, data.month));
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Unable to update this transaction.')),
+      );
+    }
+  }
+
   List<Transaction> _filterUncategorizedTransactions(MonthlyBudgetData data) {
     return data.transactions
         .where(
           (Transaction t) =>
               t.category == 'Uncategorized' && t.subcategory == 'Uncategorized',
+        )
+        .toList(growable: false);
+  }
+
+  List<Transaction> _filterMissingMilesTransactions(MonthlyBudgetData data) {
+    return data.transactions
+        .where(
+          (Transaction t) =>
+              (t.category == 'Business' || t.category == 'Healthcare') &&
+              t.noMiles == false,
         )
         .toList(growable: false);
   }
