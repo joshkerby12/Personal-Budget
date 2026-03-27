@@ -392,7 +392,7 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
                       valueListenable: _selectedCategoryNotifier,
                       builder: (BuildContext context, String? category, _) {
                         final bool showMiles = category == 'Business' ||
-                            category == 'Medical';
+                            category == 'Healthcare';
                         if (!showMiles) {
                           return const SizedBox.shrink();
                         }
@@ -713,7 +713,7 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
 
       final double? miles = double.tryParse(_milesController.text.trim());
       final String? cat = _selectedCategoryNotifier.value;
-      if (miles != null && miles > 0 && (cat == 'Business' || cat == 'Medical')) {
+      if (miles != null && miles > 0 && (cat == 'Business' || cat == 'Healthcare')) {
         final MileageTrip trip = MileageTrip(
           id: _uuid.v4(),
           orgId: widget.orgId,
@@ -725,7 +725,7 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
           oneWayMiles: miles,
           isRoundTrip: _roundTripNotifier.value,
           bizPct: bizPctValue,
-          category: cat == 'Business' ? 'Business - Other' : 'Medical',
+          category: cat == 'Business' ? 'Business - Other' : 'Healthcare',
           createdAt: DateTime.now(),
         );
         await ref
