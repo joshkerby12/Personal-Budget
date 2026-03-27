@@ -204,6 +204,8 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
           ),
           if (uncategorizedTransactions.isNotEmpty)
             const SizedBox(height: AppConstants.spacingMd),
+          _buildMobileOverviewChart(data),
+          const SizedBox(height: AppConstants.spacingMd),
         ],
         if (!_hasTransactions(data.rows)) ...<Widget>[
           Container(
@@ -1858,6 +1860,81 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
             }),
           ],
         ],
+      ),
+    );
+  }
+
+  Widget _buildMobileOverviewChart(MonthlyBudgetData data) {
+    double incomeActual = 0;
+    double incomeBudget = 0;
+    double expenseActual = 0;
+    double expenseBudget = 0;
+    double businessActual = 0;
+
+    for (final MapEntry<
+          String,
+          ({double budget, double actual, double business})
+        >
+        entry
+        in data.categorySubtotals.entries) {
+      if (isIncome(entry.key)) {
+        incomeActual += entry.value.actual;
+        incomeBudget += entry.value.budget;
+      } else if (!isTransfer(entry.key)) {
+        expenseActual += entry.value.actual;
+        expenseBudget += entry.value.budget;
+        businessActual += entry.value.business;
+      }
+    }
+
+    final double personalExpense = expenseActual - businessActual;
+    final double bizPct = expenseActual > 0 ? businessActual / expenseActual : 0;
+    final double personalPct = expenseActual > 0 ? personalExpense / expenseActual : 0;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(AppConstants.spacingMd),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Text('Monthly Overview', style: AppTextStyles.cardTitle),
+            const SizedBox(height: AppConstants.spacingMd),
+            _NetSavingsBar(
+              incomeActual: incomeActual,
+              expenseActual: expenseActual,
+              formatCurrency: _formatCurrency,
+            ),
+            const SizedBox(height: AppConstants.spacingMd),
+            _SummaryBar(
+              label: 'Income',
+              actual: incomeActual,
+              budget: incomeBudget,
+              fillColor: AppColors.green,
+              formatCurrency: _formatCurrency,
+            ),
+            const SizedBox(height: AppConstants.spacingMd),
+            _SummaryBar(
+              label:
+                  'Expenses (personal ${(personalPct * 100).toStringAsFixed(0)}% / business ${(bizPct * 100).toStringAsFixed(0)}%)',
+              actual: expenseActual,
+              budget: expenseBudget,
+              fillColor: expenseActual > expenseBudget
+                  ? AppColors.red
+                  : expenseBudget > 0 && expenseActual / expenseBudget >= 0.8
+                  ? AppColors.amber
+                  : AppColors.teal,
+              formatCurrency: _formatCurrency,
+            ),
+            const SizedBox(height: AppConstants.spacingMd),
+            _SummaryBar(
+              label: 'Business Expenses',
+              actual: businessActual,
+              budget: 0,
+              fillColor: const Color(0xFF8E44AD),
+              formatCurrency: _formatCurrency,
+            ),
+          ],
+        ),
       ),
     );
   }
