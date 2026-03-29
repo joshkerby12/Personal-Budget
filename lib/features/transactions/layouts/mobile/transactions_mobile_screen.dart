@@ -12,8 +12,10 @@ import '../../../../core/widgets/error_view.dart';
 import '../../../categories/models/category.dart';
 import '../../../categories/presentation/providers/categories_provider.dart';
 import '../../helpers/transaction_calculations.dart';
+import '../../models/csv_import_log.dart';
 import '../../models/transaction.dart';
 import '../../presentation/providers/transaction_provider.dart';
+import '../../presentation/widgets/csv_import_flow.dart';
 import '../../presentation/widgets/transaction_form.dart';
 
 const Color _businessPurple = Color(0xFF8E44AD);
@@ -21,6 +23,8 @@ final AutoDisposeStateProvider<int?> _monthFilterProvider =
     StateProvider.autoDispose<int?>((Ref ref) => DateTime.now().month);
 final AutoDisposeStateProvider<String?> _categoryFilterProvider =
     StateProvider.autoDispose<String?>((Ref ref) => null);
+final AutoDisposeStateProvider<bool> _importHistoryExpandedProvider =
+    StateProvider.autoDispose<bool>((Ref ref) => true);
 
 class TransactionsMobileScreen extends ConsumerWidget {
   const TransactionsMobileScreen({super.key});
@@ -30,6 +34,9 @@ class TransactionsMobileScreen extends ConsumerWidget {
     final AsyncValue<String?> orgIdAsync = ref.watch(currentOrgIdProvider);
     final int? selectedMonth = ref.watch(_monthFilterProvider);
     final String? selectedCategory = ref.watch(_categoryFilterProvider);
+    final bool isImportHistoryExpanded = ref.watch(
+      _importHistoryExpandedProvider,
+    );
 
     return orgIdAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -45,6 +52,9 @@ class TransactionsMobileScreen extends ConsumerWidget {
 
         final AsyncValue<List<Transaction>> transactionsAsync = ref.watch(
           transactionsProvider(orgId),
+        );
+        final AsyncValue<List<CsvImportLog>> importLogsAsync = ref.watch(
+          csvImportLogsProvider(orgId),
         );
         final AsyncValue<List<Category>> categoriesAsync = ref.watch(
           categoriesProvider,
@@ -69,67 +79,224 @@ class TransactionsMobileScreen extends ConsumerWidget {
               filtered,
             );
 
-            return Padding(
-              padding: const EdgeInsets.all(AppConstants.pagePaddingMobile),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  Text('Transactions', style: AppTextStyles.pageTitle),
-                  const SizedBox(height: AppConstants.spacingMd),
-                  _MonthChipRow(
-                    selectedMonth: selectedMonth,
-                    onSelected: (int? value) =>
-                        ref.read(_monthFilterProvider.notifier).state = value,
-                  ),
-                  const SizedBox(height: AppConstants.spacingSm),
-                  _CategoryChipRow(
-                    categories: categories,
-                    selectedCategory: selectedCategory,
-                    onSelected: (String? value) =>
-                        ref.read(_categoryFilterProvider.notifier).state =
-                            value,
-                  ),
-                  const SizedBox(height: AppConstants.spacingSm),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Text(
-                      '${filtered.length} transactions | '
-                      'Total: ${_formatCurrency(summary.total)} | '
-                      'Business: ${_formatCurrency(summary.business)} | '
-                      'Personal: ${_formatCurrency(summary.personal)}',
-                      style: AppTextStyles.label,
+            return SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.all(AppConstants.pagePaddingMobile),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    Text('Transactions', style: AppTextStyles.pageTitle),
+                    const SizedBox(height: AppConstants.spacingMd),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () => showCsvImportFlow(
+                          context,
+                          ref,
+                          isMobile: true,
+                          orgId: orgId,
+                          existingTransactions: transactions,
+                        ),
+                        icon: const Icon(Icons.upload_file_outlined),
+                        label: const Text('Import CSV'),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: AppConstants.spacingMd),
-                  Expanded(
-                    child: filtered.isEmpty
-                        ? const _EmptyState()
-                        : ListView.separated(
-                            itemCount: filtered.length,
-                            separatorBuilder:
-                                (BuildContext context, int index) =>
-                                    const SizedBox(
-                                      height: AppConstants.spacingSm,
-                                    ),
-                            itemBuilder: (BuildContext context, int index) {
-                              final Transaction transaction = filtered[index];
-                              return _TransactionListItem(
-                                transaction: transaction,
-                                onTap: () => showTransactionForm(
-                                  context,
-                                  orgId: orgId,
-                                  initialTransaction: transaction,
-                                ),
-                              );
-                            },
-                          ),
-                  ),
-                ],
+                    const SizedBox(height: AppConstants.spacingSm),
+                    _MonthChipRow(
+                      selectedMonth: selectedMonth,
+                      onSelected: (int? value) =>
+                          ref.read(_monthFilterProvider.notifier).state = value,
+                    ),
+                    const SizedBox(height: AppConstants.spacingSm),
+                    _CategoryChipRow(
+                      categories: categories,
+                      selectedCategory: selectedCategory,
+                      onSelected: (String? value) =>
+                          ref.read(_categoryFilterProvider.notifier).state =
+                              value,
+                    ),
+                    const SizedBox(height: AppConstants.spacingSm),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Text(
+                        '${filtered.length} transactions | '
+                        'Total: ${_formatCurrency(summary.total)} | '
+                        'Business: ${_formatCurrency(summary.business)} | '
+                        'Personal: ${_formatCurrency(summary.personal)}',
+                        style: AppTextStyles.label,
+                      ),
+                    ),
+                    const SizedBox(height: AppConstants.spacingMd),
+                    _MobileImportHistoryCard(
+                      logsAsync: importLogsAsync,
+                      expanded: isImportHistoryExpanded,
+                      onToggle: () =>
+                          ref
+                                  .read(_importHistoryExpandedProvider.notifier)
+                                  .state =
+                              !isImportHistoryExpanded,
+                      onTapLog: (CsvImportLog log) => showCsvImportDrillDown(
+                        context,
+                        ref,
+                        orgId: orgId,
+                        log: log,
+                      ),
+                    ),
+                    const SizedBox(height: AppConstants.spacingMd),
+                    Expanded(
+                      child: filtered.isEmpty
+                          ? const _EmptyState()
+                          : ListView.separated(
+                              itemCount: filtered.length,
+                              separatorBuilder:
+                                  (BuildContext context, int index) =>
+                                      const SizedBox(
+                                        height: AppConstants.spacingSm,
+                                      ),
+                              itemBuilder: (BuildContext context, int index) {
+                                final Transaction transaction = filtered[index];
+                                return _TransactionListItem(
+                                  transaction: transaction,
+                                  onTap: () => showTransactionForm(
+                                    context,
+                                    orgId: orgId,
+                                    initialTransaction: transaction,
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
               ),
             );
           },
         );
       },
+    );
+  }
+}
+
+class _MobileImportHistoryCard extends StatelessWidget {
+  const _MobileImportHistoryCard({
+    required this.logsAsync,
+    required this.expanded,
+    required this.onToggle,
+    required this.onTapLog,
+  });
+
+  final AsyncValue<List<CsvImportLog>> logsAsync;
+  final bool expanded;
+  final VoidCallback onToggle;
+  final ValueChanged<CsvImportLog> onTapLog;
+
+  @override
+  Widget build(BuildContext context) {
+    final DateFormat dateFormatter = DateFormat('MMM d, yyyy');
+
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          InkWell(
+            onTap: onToggle,
+            child: Padding(
+              padding: const EdgeInsets.all(AppConstants.spacingMd),
+              child: Row(
+                children: <Widget>[
+                  Text('Import History', style: AppTextStyles.cardTitle),
+                  const Spacer(),
+                  Icon(
+                    expanded ? Icons.expand_less : Icons.expand_more,
+                    color: AppColors.textMuted,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (expanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppConstants.spacingMd,
+                0,
+                AppConstants.spacingMd,
+                AppConstants.spacingMd,
+              ),
+              child: logsAsync.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (Object error, StackTrace stackTrace) => const Text(
+                  'Unable to load import history.',
+                  style: AppTextStyles.body,
+                ),
+                data: (List<CsvImportLog> logs) {
+                  if (logs.isEmpty) {
+                    return Text(
+                      'No CSV imports yet.',
+                      style: AppTextStyles.body.copyWith(
+                        color: AppColors.textMuted,
+                      ),
+                    );
+                  }
+
+                  return Column(
+                    children: logs
+                        .map((CsvImportLog log) {
+                          return InkWell(
+                            onTap: () => onTapLog(log),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                vertical: AppConstants.spacingSm,
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: <Widget>[
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: <Widget>[
+                                        Text(
+                                          log.institution,
+                                          style: AppTextStyles.cardTitle
+                                              .copyWith(fontSize: 14),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(
+                                          height: AppConstants.spacingXs,
+                                        ),
+                                        Text(
+                                          '${log.filename} · '
+                                          '${dateFormatter.format(log.importedAt)}',
+                                          style: AppTextStyles.body.copyWith(
+                                            fontSize: 12,
+                                            color: AppColors.textMuted,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: AppConstants.spacingSm),
+                                  Text(
+                                    '${log.transactionCount}',
+                                    style: AppTextStyles.cardTitle.copyWith(
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        })
+                        .toList(growable: false),
+                  );
+                },
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

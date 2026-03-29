@@ -133,13 +133,16 @@ Future<MonthlyBudgetData> monthlyBudgetData(
   for (final Transaction t in transactions) {
     final String key = _budgetKey(t.category, t.subcategory);
     if (!seenKeys.contains(key)) {
-      final _ActualAccumulator acc =
-          actualByKey.putIfAbsent(catchAllKey, _ActualAccumulator.new);
+      final _ActualAccumulator acc = actualByKey.putIfAbsent(
+        catchAllKey,
+        _ActualAccumulator.new,
+      );
       acc.add(t.amount, t.bizPct);
     }
   }
-  // Include month override keys (in case they add new rows)
-  seenKeys.addAll(overrideByKey.keys.where(seenKeys.contains));
+  // Include all month override keys so month-scoped subcategories appear in
+  // the selected month even when no global default exists.
+  seenKeys.addAll(overrideByKey.keys);
   // Include actual keys only for known subcategories
   seenKeys.addAll(actualByKey.keys.where(seenKeys.contains));
 
@@ -176,6 +179,10 @@ Future<MonthlyBudgetData> monthlyBudgetData(
     final bool hasCustomBudget = override != null;
     final double defaultBizPct =
         override?.defaultBizPct ?? global?.defaultBizPct ?? 0;
+    final String? monthOverrideId = (override != null && override.id.isNotEmpty)
+        ? override.id
+        : null;
+    final bool isMonthScoped = global == null && override != null;
 
     rows.add(
       MonthlyRow(
@@ -190,6 +197,8 @@ Future<MonthlyBudgetData> monthlyBudgetData(
         hasCustomBudget: hasCustomBudget,
         globalBudget: globalBudget,
         defaultBizPct: defaultBizPct,
+        monthOverrideId: monthOverrideId,
+        isMonthScoped: isMonthScoped,
       ),
     );
 
@@ -327,6 +336,8 @@ class MonthlyRow {
     required this.hasCustomBudget,
     required this.globalBudget,
     required this.defaultBizPct,
+    required this.monthOverrideId,
+    required this.isMonthScoped,
   });
 
   final String category;
@@ -340,6 +351,8 @@ class MonthlyRow {
   final bool hasCustomBudget;
   final double globalBudget;
   final double defaultBizPct;
+  final String? monthOverrideId;
+  final bool isMonthScoped;
 
   String get key => _budgetKey(category, subcategory);
 }

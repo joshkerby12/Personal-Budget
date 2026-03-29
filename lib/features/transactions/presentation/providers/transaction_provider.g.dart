@@ -24,6 +24,23 @@ final transactionServiceProvider = Provider<TransactionService>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef TransactionServiceRef = ProviderRef<TransactionService>;
+String _$csvImportServiceHash() => r'85072c72767b6d5dd6f2d36458ce3d9ef52e75c1';
+
+/// See also [csvImportService].
+@ProviderFor(csvImportService)
+final csvImportServiceProvider = Provider<CsvImportService>.internal(
+  csvImportService,
+  name: r'csvImportServiceProvider',
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$csvImportServiceHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef CsvImportServiceRef = ProviderRef<CsvImportService>;
 String _$transactionsHash() => r'cf2bcd7aa53ea04c57b82aef784bd4e63cabedda';
 
 /// Copied from Dart SDK
@@ -315,6 +332,127 @@ class _RecentCategorizedTransactionsProviderElement
   String get orgId => (origin as RecentCategorizedTransactionsProvider).orgId;
 }
 
+String _$csvImportLogsHash() => r'641c7a6800cad06542002b1431014fddeb6ec4a4';
+
+/// See also [csvImportLogs].
+@ProviderFor(csvImportLogs)
+const csvImportLogsProvider = CsvImportLogsFamily();
+
+/// See also [csvImportLogs].
+class CsvImportLogsFamily extends Family<AsyncValue<List<CsvImportLog>>> {
+  /// See also [csvImportLogs].
+  const CsvImportLogsFamily();
+
+  /// See also [csvImportLogs].
+  CsvImportLogsProvider call(String orgId) {
+    return CsvImportLogsProvider(orgId);
+  }
+
+  @override
+  CsvImportLogsProvider getProviderOverride(
+    covariant CsvImportLogsProvider provider,
+  ) {
+    return call(provider.orgId);
+  }
+
+  static const Iterable<ProviderOrFamily>? _dependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get dependencies => _dependencies;
+
+  static const Iterable<ProviderOrFamily>? _allTransitiveDependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get allTransitiveDependencies =>
+      _allTransitiveDependencies;
+
+  @override
+  String? get name => r'csvImportLogsProvider';
+}
+
+/// See also [csvImportLogs].
+class CsvImportLogsProvider
+    extends AutoDisposeFutureProvider<List<CsvImportLog>> {
+  /// See also [csvImportLogs].
+  CsvImportLogsProvider(String orgId)
+    : this._internal(
+        (ref) => csvImportLogs(ref as CsvImportLogsRef, orgId),
+        from: csvImportLogsProvider,
+        name: r'csvImportLogsProvider',
+        debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+            ? null
+            : _$csvImportLogsHash,
+        dependencies: CsvImportLogsFamily._dependencies,
+        allTransitiveDependencies:
+            CsvImportLogsFamily._allTransitiveDependencies,
+        orgId: orgId,
+      );
+
+  CsvImportLogsProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.orgId,
+  }) : super.internal();
+
+  final String orgId;
+
+  @override
+  Override overrideWith(
+    FutureOr<List<CsvImportLog>> Function(CsvImportLogsRef provider) create,
+  ) {
+    return ProviderOverride(
+      origin: this,
+      override: CsvImportLogsProvider._internal(
+        (ref) => create(ref as CsvImportLogsRef),
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        orgId: orgId,
+      ),
+    );
+  }
+
+  @override
+  AutoDisposeFutureProviderElement<List<CsvImportLog>> createElement() {
+    return _CsvImportLogsProviderElement(this);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is CsvImportLogsProvider && other.orgId == orgId;
+  }
+
+  @override
+  int get hashCode {
+    var hash = _SystemHash.combine(0, runtimeType.hashCode);
+    hash = _SystemHash.combine(hash, orgId.hashCode);
+
+    return _SystemHash.finish(hash);
+  }
+}
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+mixin CsvImportLogsRef on AutoDisposeFutureProviderRef<List<CsvImportLog>> {
+  /// The parameter `orgId` of this provider.
+  String get orgId;
+}
+
+class _CsvImportLogsProviderElement
+    extends AutoDisposeFutureProviderElement<List<CsvImportLog>>
+    with CsvImportLogsRef {
+  _CsvImportLogsProviderElement(super.provider);
+
+  @override
+  String get orgId => (origin as CsvImportLogsProvider).orgId;
+}
+
 String _$transactionControllerHash() =>
     r'33dee52ab2e10156fd9f539f13589f0f0d2e0b5b';
 
@@ -335,5 +473,22 @@ final transactionControllerProvider =
     );
 
 typedef _$TransactionController = AutoDisposeNotifier<AsyncValue<void>>;
+String _$csvImportControllerHash() =>
+    r'92d94189d29e5aa70bbf2a8bd3be08cd15c2205a';
+
+/// See also [CsvImportController].
+@ProviderFor(CsvImportController)
+final csvImportControllerProvider =
+    AutoDisposeNotifierProvider<CsvImportController, AsyncValue<void>>.internal(
+      CsvImportController.new,
+      name: r'csvImportControllerProvider',
+      debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+          ? null
+          : _$csvImportControllerHash,
+      dependencies: null,
+      allTransitiveDependencies: null,
+    );
+
+typedef _$CsvImportController = AutoDisposeNotifier<AsyncValue<void>>;
 // ignore_for_file: type=lint
 // ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member, deprecated_member_use_from_same_package

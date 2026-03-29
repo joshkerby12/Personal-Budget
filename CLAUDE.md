@@ -31,7 +31,7 @@ This project uses a three-agent model:
 | **Codex** | Executor — picks up tasks from `docs/tasks.md`, writes code, runs terminal commands |
 | **Copilot** | Inline assistant — autocomplete only, not spec-aware |
 
-Claude scopes and assigns all tasks. Codex implements. Claude reviews. Director approves.
+Claude scopes and assigns all tasks. Codex implements and marks tasks done. No review step — issues get handled if they surface.
 
 ---
 
@@ -61,7 +61,7 @@ Claude scopes and assigns all tasks. Codex implements. Claude reviews. Director 
 5. **Riverpod only** — no `setState`, no `ChangeNotifier`. `@riverpod` annotations everywhere.
 6. **`build_runner` after every `@riverpod` or `@freezed` change** — `flutter pub run build_runner build --delete-conflicting-outputs`
 7. **Docs stay current** — `docs/architecture.md` must reflect the current state of the project after every task. A task is not done until the map is updated.
-8. **Task review flow** — Codex marks tasks `needs-review`, never `done`. Claude or director marks `done`.
+8. **Task review flow** — Codex marks tasks `done` and moves them to the Completed Tasks table himself. No review step required. If an issue surfaces, it gets handled then.
 
 ---
 

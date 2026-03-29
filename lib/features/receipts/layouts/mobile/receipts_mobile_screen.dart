@@ -82,97 +82,105 @@ class _ReceiptsMobileScreenState extends ConsumerState<ReceiptsMobileScreen> {
                     tx.id: tx,
                 };
 
-            return Padding(
-              padding: const EdgeInsets.all(AppConstants.pagePaddingMobile),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  Row(
-                    children: <Widget>[
-                      Text('Receipts', style: AppTextStyles.pageTitle),
-                      const Spacer(),
-                      IconButton(
-                        onPressed: () => _pickAndUpload(orgId),
-                        tooltip: 'Upload receipt',
-                        icon: const Icon(Icons.upload_file_outlined),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppConstants.spacingSm),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
+            return SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.all(AppConstants.pagePaddingMobile),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    Row(
                       children: <Widget>[
-                        _buildFilterChip(
-                          label: 'All',
-                          value: _ReceiptLinkFilter.all,
-                          selected: query.linkFilter,
-                        ),
-                        const SizedBox(width: AppConstants.spacingSm),
-                        _buildFilterChip(
-                          label: 'Linked',
-                          value: _ReceiptLinkFilter.linked,
-                          selected: query.linkFilter,
-                        ),
-                        const SizedBox(width: AppConstants.spacingSm),
-                        _buildFilterChip(
-                          label: 'Unlinked',
-                          value: _ReceiptLinkFilter.unlinked,
-                          selected: query.linkFilter,
+                        Text('Receipts', style: AppTextStyles.pageTitle),
+                        const Spacer(),
+                        IconButton(
+                          onPressed: () => _pickAndUpload(orgId),
+                          tooltip: 'Upload receipt',
+                          icon: const Icon(Icons.upload_file_outlined),
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: AppConstants.spacingSm),
-                  TextField(
-                    controller: _searchController,
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.search),
-                      labelText: 'Search by filename',
-                    ),
-                    onChanged: (String value) {
-                      _queryNotifier.value = query.copyWith(searchText: value);
-                    },
-                  ),
-                  const SizedBox(height: AppConstants.spacingMd),
-                  Expanded(
-                    child: receiptsAsync.when(
-                      loading: () =>
-                          const Center(child: CircularProgressIndicator()),
-                      error: (Object error, StackTrace stackTrace) =>
-                          const Center(
-                            child: ErrorView(
-                              message: 'Unable to load receipts right now.',
-                            ),
+                    const SizedBox(height: AppConstants.spacingSm),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: <Widget>[
+                          _buildFilterChip(
+                            label: 'All',
+                            value: _ReceiptLinkFilter.all,
+                            selected: query.linkFilter,
                           ),
-                      data: (List<Receipt> receipts) {
-                        if (receipts.isEmpty) {
-                          return const _EmptyState();
-                        }
-
-                        return ListView.separated(
-                          itemCount: receipts.length,
-                          separatorBuilder: (BuildContext context, int index) =>
-                              const SizedBox(height: AppConstants.spacingSm),
-                          itemBuilder: (BuildContext context, int index) {
-                            final Receipt receipt = receipts[index];
-                            final Transaction? linkedTransaction =
-                                transactionMap[receipt.transactionId];
-                            return _ReceiptCard(
-                              receipt: receipt,
-                              linkedTransaction: linkedTransaction,
-                              onTap: () => showReceiptDetailSheet(
-                                context,
-                                orgId: orgId,
-                                receipt: receipt,
-                              ),
-                            );
-                          },
+                          const SizedBox(width: AppConstants.spacingSm),
+                          _buildFilterChip(
+                            label: 'Linked',
+                            value: _ReceiptLinkFilter.linked,
+                            selected: query.linkFilter,
+                          ),
+                          const SizedBox(width: AppConstants.spacingSm),
+                          _buildFilterChip(
+                            label: 'Unlinked',
+                            value: _ReceiptLinkFilter.unlinked,
+                            selected: query.linkFilter,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: AppConstants.spacingSm),
+                    TextField(
+                      controller: _searchController,
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.search),
+                        labelText: 'Search by filename',
+                      ),
+                      onChanged: (String value) {
+                        _queryNotifier.value = query.copyWith(
+                          searchText: value,
                         );
                       },
                     ),
-                  ),
-                ],
+                    const SizedBox(height: AppConstants.spacingMd),
+                    Expanded(
+                      child: receiptsAsync.when(
+                        loading: () =>
+                            const Center(child: CircularProgressIndicator()),
+                        error: (Object error, StackTrace stackTrace) =>
+                            const Center(
+                              child: ErrorView(
+                                message: 'Unable to load receipts right now.',
+                              ),
+                            ),
+                        data: (List<Receipt> receipts) {
+                          if (receipts.isEmpty) {
+                            return const _EmptyState();
+                          }
+
+                          return ListView.separated(
+                            itemCount: receipts.length,
+                            separatorBuilder:
+                                (BuildContext context, int index) =>
+                                    const SizedBox(
+                                      height: AppConstants.spacingSm,
+                                    ),
+                            itemBuilder: (BuildContext context, int index) {
+                              final Receipt receipt = receipts[index];
+                              final Transaction? linkedTransaction =
+                                  transactionMap[receipt.transactionId];
+                              return _ReceiptCard(
+                                receipt: receipt,
+                                linkedTransaction: linkedTransaction,
+                                onTap: () => showReceiptDetailSheet(
+                                  context,
+                                  orgId: orgId,
+                                  receipt: receipt,
+                                ),
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
               ),
             );
           },

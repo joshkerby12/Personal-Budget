@@ -1,5 +1,3 @@
-import 'dart:collection';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -20,14 +18,28 @@ import '../../../mileage/models/mileage_trip.dart';
 import '../../../mileage/presentation/providers/mileage_provider.dart';
 import '../../helpers/transaction_calculations.dart';
 import '../../models/transaction.dart';
+import '../../../teller/models/teller_enrollment.dart';
+import '../../../teller/presentation/providers/teller_provider.dart';
 import '../providers/transaction_provider.dart';
 
 final Uuid _uuid = const Uuid();
+
+String _normalizeMerchant(String merchant) {
+  final String upper = merchant.toUpperCase();
+  final String stripped = upper.replaceAll(RegExp(r'[^A-Z ]'), '');
+  final List<String> tokens = stripped
+      .split(' ')
+      .where((String token) => token.isNotEmpty)
+      .toList();
+  return tokens.take(4).join(' ');
+}
 
 Future<void> showTransactionForm(
   BuildContext context, {
   required String orgId,
   Transaction? initialTransaction,
+  String? initialCategory,
+  String? initialSubcategory,
 }) async {
   final bool isMobile =
       MediaQuery.sizeOf(context).width < AppConstants.mobileBreakpoint;
@@ -35,11 +47,14 @@ Future<void> showTransactionForm(
   if (isMobile) {
     await showModalBottomSheet<void>(
       context: context,
+      enableDrag: true,
       isScrollControlled: true,
       builder: (BuildContext sheetContext) {
         return TransactionForm(
           orgId: orgId,
           initialTransaction: initialTransaction,
+          initialCategory: initialCategory,
+          initialSubcategory: initialSubcategory,
           onClose: () => Navigator.of(sheetContext).pop(),
         );
       },
@@ -57,6 +72,8 @@ Future<void> showTransactionForm(
           child: TransactionForm(
             orgId: orgId,
             initialTransaction: initialTransaction,
+            initialCategory: initialCategory,
+            initialSubcategory: initialSubcategory,
             onClose: () => Navigator.of(dialogContext).pop(),
           ),
         ),
@@ -70,11 +87,15 @@ class TransactionForm extends ConsumerStatefulWidget {
     super.key,
     required this.orgId,
     this.initialTransaction,
+    this.initialCategory,
+    this.initialSubcategory,
     required this.onClose,
   });
 
   final String orgId;
   final Transaction? initialTransaction;
+  final String? initialCategory;
+  final String? initialSubcategory;
   final VoidCallback onClose;
 
   @override
@@ -102,19 +123,36 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
 
   late final bool _isEdit;
   bool _hasManualBizPctOverride = false;
+  late bool _allowBlankCategorySelectionForUncategorized;
+  bool _hasAppliedSuggestion = false;
+  bool _hasManualCategoryChoice = false;
 
   @override
   void initState() {
     super.initState();
     final Transaction? transaction = widget.initialTransaction;
     _isEdit = transaction != null;
+    final bool isUncategorizedTransaction =
+        transaction?.category == 'Uncategorized' &&
+        transaction?.subcategory == 'Uncategorized';
+
+    final String? seededCategory =
+        widget.initialCategory ??
+        (isUncategorizedTransaction ? null : transaction?.category);
+    final String? seededSubcategory =
+        widget.initialSubcategory ??
+        (isUncategorizedTransaction ? null : transaction?.subcategory);
+    _allowBlankCategorySelectionForUncategorized =
+        isUncategorizedTransaction &&
+        widget.initialCategory == null &&
+        widget.initialSubcategory == null;
+    _hasAppliedSuggestion =
+        widget.initialCategory != null || widget.initialSubcategory != null;
 
     final DateTime date = transaction?.date ?? DateTime.now();
     _selectedDateNotifier = ValueNotifier<DateTime>(date);
-    _selectedCategoryNotifier = ValueNotifier<String?>(transaction?.category);
-    _selectedSubcategoryNotifier = ValueNotifier<String?>(
-      transaction?.subcategory,
-    );
+    _selectedCategoryNotifier = ValueNotifier<String?>(seededCategory);
+    _selectedSubcategoryNotifier = ValueNotifier<String?>(seededSubcategory);
     _isSplitNotifier = ValueNotifier<bool>(transaction?.isSplit ?? false);
     _attachedReceiptIdNotifier = ValueNotifier<String?>(null);
     _attachedReceiptFilenameNotifier = ValueNotifier<String?>(null);
@@ -170,6 +208,16 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
     final AsyncValue<List<Receipt>> receiptsAsync = ref.watch(
       receiptsProvider(widget.orgId),
     );
+    final AsyncValue<List<TellerEnrollment>> tellerEnrollmentsAsync = ref.watch(
+      tellerEnrollmentsProvider(widget.orgId),
+    );
+    final bool isInitialUncategorized =
+        widget.initialTransaction?.category == 'Uncategorized' &&
+        widget.initialTransaction?.subcategory == 'Uncategorized';
+    final AsyncValue<List<Transaction>> suggestionHistoryAsync =
+        isInitialUncategorized
+        ? ref.watch(recentCategorizedTransactionsProvider(widget.orgId))
+        : const AsyncData<List<Transaction>>(<Transaction>[]);
     final bool isReceiptBusy = ref.watch(receiptControllerProvider).isLoading;
 
     return SafeArea(
@@ -200,10 +248,20 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
               onClose: widget.onClose,
             ),
             data: (List<BudgetDefault> defaults) {
-              final _CategoryData categoryData = _CategoryData.fromDefaults(
-                defaults,
+              final _CategoryData categoryData = _CategoryData.fromCategories(
+                categories,
               );
+              final ({String category, String subcategory})? suggestion =
+                  _buildSuggestion(
+                    widget.initialTransaction,
+                    suggestionHistoryAsync.valueOrNull ?? const <Transaction>[],
+                  );
+              _applySuggestionIfNeeded(suggestion, defaults);
               _syncSelection(categoryData, defaults);
+              final Widget sourceLabel = _buildSourceLabel(
+                tellerEnrollmentsAsync,
+              );
+              final bool hasSourceLabel = sourceLabel is! SizedBox;
 
               return Form(
                 key: _formKey,
@@ -216,6 +274,9 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
                       style: AppTextStyles.cardTitle,
                     ),
                     const SizedBox(height: AppConstants.spacingMd),
+                    sourceLabel,
+                    if (hasSourceLabel)
+                      const SizedBox(height: AppConstants.spacingSm),
                     TextFormField(
                       controller: _dateController,
                       readOnly: true,
@@ -274,6 +335,7 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
                           decoration: const InputDecoration(
                             labelText: 'Category',
                           ),
+                          hint: const Text('Select category'),
                           items: categoryData.parentCategories
                               .map(
                                 (String parent) => DropdownMenuItem<String>(
@@ -286,14 +348,23 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
                               value == null ? 'Category is required.' : null,
                           onChanged: (String? value) {
                             _selectedCategoryNotifier.value = value;
+                            _allowBlankCategorySelectionForUncategorized =
+                                false;
+                            _hasManualCategoryChoice = true;
+                            _selectedSubcategoryNotifier.value = null;
+
                             final List<String> subcategories =
                                 categoryData.subcategoriesByParent[value] ??
                                 const <String>[];
-                            _selectedSubcategoryNotifier.value =
-                                subcategories.isEmpty
-                                ? null
-                                : subcategories.first;
-                            _maybeApplyDefaultBizPct(defaults);
+                            if (subcategories.isEmpty) {
+                              _maybeApplyDefaultBizPct(defaults);
+                              return;
+                            }
+                            _autoOpenSubcategoryPicker(
+                              context,
+                              subcategories,
+                              defaults,
+                            );
                           },
                         );
                       },
@@ -319,6 +390,7 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
                                   decoration: const InputDecoration(
                                     labelText: 'Subcategory',
                                   ),
+                                  hint: const Text('Select subcategory'),
                                   items: subcategories
                                       .map(
                                         (String value) =>
@@ -332,6 +404,7 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
                                       ? 'Subcategory is required.'
                                       : null,
                                   onChanged: (String? value) {
+                                    _hasManualCategoryChoice = true;
                                     _selectedSubcategoryNotifier.value = value;
                                     _maybeApplyDefaultBizPct(defaults);
                                   },
@@ -391,8 +464,8 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
                     ValueListenableBuilder<String?>(
                       valueListenable: _selectedCategoryNotifier,
                       builder: (BuildContext context, String? category, _) {
-                        final bool showMiles = category == 'Business' ||
-                            category == 'Healthcare';
+                        final bool showMiles =
+                            category == 'Business' || category == 'Healthcare';
                         if (!showMiles) {
                           return const SizedBox.shrink();
                         }
@@ -403,8 +476,8 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
                               controller: _milesController,
                               keyboardType:
                                   const TextInputType.numberWithOptions(
-                                decimal: true,
-                              ),
+                                    decimal: true,
+                                  ),
                               decoration: const InputDecoration(
                                 labelText: 'Miles driven (optional)',
                                 suffixText: 'mi',
@@ -413,34 +486,31 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
                             const SizedBox(height: AppConstants.spacingSm),
                             ValueListenableBuilder<bool>(
                               valueListenable: _roundTripNotifier,
-                              builder: (
-                                BuildContext context,
-                                bool isRoundTrip,
-                                _,
-                              ) {
-                                return DropdownButtonFormField<bool>(
-                                  key: ValueKey<bool>(isRoundTrip),
-                                  initialValue: isRoundTrip,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Round trip?',
-                                  ),
-                                  items: const <DropdownMenuItem<bool>>[
-                                    DropdownMenuItem<bool>(
-                                      value: false,
-                                      child: Text('No'),
-                                    ),
-                                    DropdownMenuItem<bool>(
-                                      value: true,
-                                      child: Text('Yes'),
-                                    ),
-                                  ],
-                                  onChanged: (bool? value) {
-                                    if (value != null) {
-                                      _roundTripNotifier.value = value;
-                                    }
+                              builder:
+                                  (BuildContext context, bool isRoundTrip, _) {
+                                    return DropdownButtonFormField<bool>(
+                                      key: ValueKey<bool>(isRoundTrip),
+                                      initialValue: isRoundTrip,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Round trip?',
+                                      ),
+                                      items: const <DropdownMenuItem<bool>>[
+                                        DropdownMenuItem<bool>(
+                                          value: false,
+                                          child: Text('No'),
+                                        ),
+                                        DropdownMenuItem<bool>(
+                                          value: true,
+                                          child: Text('Yes'),
+                                        ),
+                                      ],
+                                      onChanged: (bool? value) {
+                                        if (value != null) {
+                                          _roundTripNotifier.value = value;
+                                        }
+                                      },
+                                    );
                                   },
-                                );
-                              },
                             ),
                             const SizedBox(height: AppConstants.spacingSm),
                           ],
@@ -576,6 +646,11 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
     }
 
     String? selectedCategory = _selectedCategoryNotifier.value;
+    if (_allowBlankCategorySelectionForUncategorized &&
+        selectedCategory == null) {
+      _selectedSubcategoryNotifier.value = null;
+      return;
+    }
     if (selectedCategory == null ||
         !categoryData.parentCategories.contains(selectedCategory)) {
       selectedCategory = categoryData.parentCategories.first;
@@ -596,6 +671,182 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
       _selectedSubcategoryNotifier.value = subcategories.first;
     }
     _maybeApplyDefaultBizPct(defaults);
+  }
+
+  ({String category, String subcategory})? _buildSuggestion(
+    Transaction? transaction,
+    List<Transaction> history,
+  ) {
+    if (transaction == null ||
+        transaction.category != 'Uncategorized' ||
+        transaction.subcategory != 'Uncategorized') {
+      return null;
+    }
+
+    final String merchantPrefix = _normalizeMerchant(transaction.merchant);
+    if (merchantPrefix.isEmpty) {
+      return null;
+    }
+
+    final Map<String, int> votes = <String, int>{};
+    final Map<String, ({String category, String subcategory})> pairByKey =
+        <String, ({String category, String subcategory})>{};
+
+    for (final Transaction candidate in history) {
+      if (candidate.category == 'Uncategorized') {
+        continue;
+      }
+
+      final String candidatePrefix = _normalizeMerchant(candidate.merchant);
+      if (candidatePrefix.isEmpty || candidatePrefix != merchantPrefix) {
+        continue;
+      }
+
+      final String key = '${candidate.category}\u0000${candidate.subcategory}';
+      votes[key] = (votes[key] ?? 0) + 1;
+      pairByKey[key] = (
+        category: candidate.category,
+        subcategory: candidate.subcategory,
+      );
+    }
+
+    if (votes.isEmpty) {
+      return null;
+    }
+
+    String? winner;
+    int winnerVotes = -1;
+    for (final MapEntry<String, int> entry in votes.entries) {
+      if (entry.value > winnerVotes) {
+        winnerVotes = entry.value;
+        winner = entry.key;
+      }
+    }
+    if (winner == null) {
+      return null;
+    }
+
+    return pairByKey[winner];
+  }
+
+  void _applySuggestionIfNeeded(
+    ({String category, String subcategory})? suggestion,
+    List<BudgetDefault> defaults,
+  ) {
+    if (_hasAppliedSuggestion ||
+        _hasManualCategoryChoice ||
+        suggestion == null) {
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _hasAppliedSuggestion || _hasManualCategoryChoice) {
+        return;
+      }
+      _selectedCategoryNotifier.value = suggestion.category;
+      _selectedSubcategoryNotifier.value = suggestion.subcategory;
+      _allowBlankCategorySelectionForUncategorized = false;
+      _hasAppliedSuggestion = true;
+      _maybeApplyDefaultBizPct(defaults);
+    });
+  }
+
+  Future<void> _autoOpenSubcategoryPicker(
+    BuildContext context,
+    List<String> options,
+    List<BudgetDefault> defaults,
+  ) async {
+    if (options.isEmpty) {
+      return;
+    }
+    final bool isMobile =
+        MediaQuery.sizeOf(context).width < AppConstants.mobileBreakpoint;
+    String? selected;
+
+    if (isMobile) {
+      selected = await showModalBottomSheet<String>(
+        context: context,
+        showDragHandle: true,
+        builder: (BuildContext sheetContext) {
+          return SafeArea(
+            top: false,
+            child: ListView(
+              shrinkWrap: true,
+              children: options
+                  .map(
+                    (String option) => ListTile(
+                      title: Text(option),
+                      onTap: () => Navigator.of(sheetContext).pop(option),
+                    ),
+                  )
+                  .toList(growable: false),
+            ),
+          );
+        },
+      );
+    } else {
+      selected = await showDialog<String>(
+        context: context,
+        builder: (BuildContext dialogContext) {
+          return AlertDialog(
+            title: const Text('Choose subcategory'),
+            content: SizedBox(
+              width: 360,
+              child: ListView(
+                shrinkWrap: true,
+                children: options
+                    .map(
+                      (String option) => ListTile(
+                        title: Text(option),
+                        onTap: () => Navigator.of(dialogContext).pop(option),
+                      ),
+                    )
+                    .toList(growable: false),
+              ),
+            ),
+          );
+        },
+      );
+    }
+
+    if (selected == null || !mounted) {
+      return;
+    }
+    _selectedSubcategoryNotifier.value = selected;
+    _maybeApplyDefaultBizPct(defaults);
+  }
+
+  Widget _buildSourceLabel(
+    AsyncValue<List<TellerEnrollment>> enrollmentsAsync,
+  ) {
+    final Transaction? initial = widget.initialTransaction;
+    if (!_isEdit || initial == null || initial.source == 'manual') {
+      return const SizedBox.shrink();
+    }
+
+    final List<TellerEnrollment> enrollments =
+        enrollmentsAsync.valueOrNull ?? const <TellerEnrollment>[];
+    final TellerEnrollment? enrollment = enrollments.isNotEmpty
+        ? enrollments.first
+        : null;
+    final String label = enrollment == null
+        ? 'Imported from connected bank account'
+        : '${enrollment.institutionName} ${enrollment.accountName} '
+              '••${enrollment.accountLastFour ?? '----'}';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppConstants.spacingSm,
+        vertical: AppConstants.spacingXs,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.lightGray,
+        borderRadius: BorderRadius.circular(AppConstants.spacingXs),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Text(label, style: AppTextStyles.label.copyWith(fontSize: 12)),
+    );
   }
 
   void _maybeApplyDefaultBizPct(List<BudgetDefault> defaults) {
@@ -697,6 +948,8 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
       isSplit: _isSplitNotifier.value,
       receiptId: attachedReceiptId ?? initialTransaction?.receiptId,
       notes: _emptyToNull(_notesController.text),
+      source: initialTransaction?.source ?? 'manual',
+      tellerTransactionId: initialTransaction?.tellerTransactionId,
       createdAt: initialTransaction?.createdAt ?? DateTime.now(),
     );
 
@@ -713,7 +966,9 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
 
       final double? miles = double.tryParse(_milesController.text.trim());
       final String? cat = _selectedCategoryNotifier.value;
-      if (miles != null && miles > 0 && (cat == 'Business' || cat == 'Healthcare')) {
+      if (miles != null &&
+          miles > 0 &&
+          (cat == 'Business' || cat == 'Healthcare')) {
         final MileageTrip trip = MileageTrip(
           id: _uuid.v4(),
           orgId: widget.orgId,
@@ -982,51 +1237,45 @@ class _CategoryData {
   final List<String> parentCategories;
   final Map<String, List<String>> subcategoriesByParent;
 
-  factory _CategoryData.fromDefaults(List<BudgetDefault> defaults) {
-    final LinkedHashSet<String> parents = LinkedHashSet<String>();
-    final Map<String, LinkedHashSet<String>> grouped =
-        <String, LinkedHashSet<String>>{};
-
-    for (final BudgetDefault d in defaults) {
-      parents.add(d.category);
-      grouped
-          .putIfAbsent(d.category, () => LinkedHashSet<String>())
-          .add(d.subcategory);
-    }
-
-    // Always include Transfers so CC payments can be categorized
-    grouped.putIfAbsent('Transfers', () => LinkedHashSet<String>())
-      ..add('Credit Card Payment')
-      ..add('Account Transfer');
-    parents.add('Transfers');
-
-    return _CategoryData(
-      parentCategories: parents.toList(growable: false),
-      subcategoriesByParent: grouped.map(
-        (String key, LinkedHashSet<String> value) =>
-            MapEntry<String, List<String>>(key, value.toList(growable: false)),
-      ),
-    );
-  }
-
   factory _CategoryData.fromCategories(List<Category> categories) {
-    final LinkedHashSet<String> parents = LinkedHashSet<String>();
-    final Map<String, LinkedHashSet<String>> grouped =
-        <String, LinkedHashSet<String>>{};
+    final Map<String, List<Category>> grouped = <String, List<Category>>{};
 
     for (final Category category in categories) {
-      parents.add(category.parentCategory);
       grouped
-          .putIfAbsent(category.parentCategory, () => LinkedHashSet<String>())
-          .add(category.subcategory);
+          .putIfAbsent(category.parentCategory, () => <Category>[])
+          .add(category);
+    }
+
+    final List<String> parents = grouped.keys.toList(growable: false)
+      ..sort(compareCategoryOrder);
+
+    final Map<String, List<String>> subcategoriesByParent =
+        <String, List<String>>{};
+    for (final String parent in parents) {
+      final List<Category> rows = List<Category>.from(grouped[parent]!)
+        ..sort((Category a, Category b) {
+          final int orderCmp = a.sortOrder.compareTo(b.sortOrder);
+          if (orderCmp != 0) {
+            return orderCmp;
+          }
+          return a.subcategory.compareTo(b.subcategory);
+        });
+      subcategoriesByParent[parent] = rows
+          .map((Category c) => c.subcategory)
+          .toList(growable: false);
+    }
+
+    subcategoriesByParent.putIfAbsent(
+      'Transfers',
+      () => <String>['Credit Card Payment', 'Account Transfer'],
+    );
+    if (!parents.contains('Transfers')) {
+      parents.add('Transfers');
     }
 
     return _CategoryData(
-      parentCategories: parents.toList(growable: false),
-      subcategoriesByParent: grouped.map(
-        (String key, LinkedHashSet<String> value) =>
-            MapEntry<String, List<String>>(key, value.toList(growable: false)),
-      ),
+      parentCategories: parents,
+      subcategoriesByParent: subcategoriesByParent,
     );
   }
 }

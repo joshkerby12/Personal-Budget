@@ -12,6 +12,7 @@ class CategoryService {
         .from('categories')
         .select()
         .eq('org_id', orgId)
+        .order('parent_category', ascending: true)
         .order('sort_order', ascending: true);
 
     return rows

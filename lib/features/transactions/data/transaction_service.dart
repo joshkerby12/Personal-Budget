@@ -64,6 +64,9 @@ class TransactionService {
       'is_split': transaction.isSplit,
       'receipt_id': transaction.receiptId,
       'notes': transaction.notes,
+      'source': transaction.source,
+      'teller_transaction_id': transaction.tellerTransactionId,
+      'csv_import_log_id': transaction.csvImportLogId,
       'no_miles': transaction.noMiles,
       'created_at': transaction.createdAt.toUtc().toIso8601String(),
     });
@@ -83,6 +86,9 @@ class TransactionService {
           'is_split': transaction.isSplit,
           'receipt_id': transaction.receiptId,
           'notes': transaction.notes,
+          'source': transaction.source,
+          'teller_transaction_id': transaction.tellerTransactionId,
+          'csv_import_log_id': transaction.csvImportLogId,
           'no_miles': transaction.noMiles,
         })
         .eq('id', transaction.id);

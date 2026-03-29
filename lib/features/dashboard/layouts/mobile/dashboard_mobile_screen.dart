@@ -27,27 +27,17 @@ final NumberFormat _compactCurrencyFormat = NumberFormat.compactCurrency(
   symbol: r'$',
 );
 const Color _businessPurple = Color(0xFF7D3C98);
-const List<String> _monthInitials = <String>[
-  'J',
-  'F',
-  'M',
-  'A',
-  'M',
-  'J',
-  'J',
-  'A',
-  'S',
-  'O',
-  'N',
-  'D',
-];
+final AutoDisposeStateProvider<DashboardRange> _selectedRangeProvider =
+    StateProvider.autoDispose<DashboardRange>(
+      (Ref ref) => DashboardRange.thisMonth,
+    );
 
 class DashboardMobileScreen extends ConsumerWidget {
   const DashboardMobileScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final DateTime now = DateTime.now();
+    final DashboardRange selectedRange = ref.watch(_selectedRangeProvider);
     final AsyncValue<String?> orgIdAsync = ref.watch(dashboardOrgIdProvider);
 
     return orgIdAsync.when(
@@ -63,7 +53,7 @@ class DashboardMobileScreen extends ConsumerWidget {
         }
 
         final AsyncValue<DashboardSummary> summaryAsync = ref.watch(
-          dashboardSummaryProvider(orgId, now.year),
+          dashboardSummaryProvider(orgId, selectedRange),
         );
         final AsyncValue<List<BudgetDefault>> budgetsAsync = ref.watch(
           budgetDefaultsProvider(orgId),
@@ -91,77 +81,114 @@ class DashboardMobileScreen extends ConsumerWidget {
                     child: ErrorView(message: 'Unable to load transactions.'),
                   ),
                   data: (List<Transaction> transactions) {
+                    final List<Transaction> rangedTransactions = transactions
+                        .where(
+                          (Transaction t) =>
+                              !t.date.isBefore(summary.startDate) &&
+                              !t.date.isAfter(summary.endDate),
+                        )
+                        .toList(growable: false);
                     final List<Transaction> sorted = List<Transaction>.from(
-                      transactions,
+                      rangedTransactions,
                     )..sort(_sortByDateDesc);
                     final List<Transaction> recent = sorted
                         .take(5)
                         .toList(growable: false);
                     final List<_CategoryMonthRow> categoryRows =
-                        _buildThisMonthCategoryRows(
+                        _buildRangeCategoryRows(
                           transactions: sorted,
                           budgets: budgets,
-                          year: now.year,
-                          month: now.month,
                         );
 
                     final GoRouter router = GoRouter.of(context);
 
-                    return SingleChildScrollView(
-                      padding: const EdgeInsets.all(
-                        AppConstants.pagePaddingMobile,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: <Widget>[
-                          Text(
-                            'Dashboard — ${DateFormat('MMMM yyyy').format(now)}',
-                            style: AppTextStyles.pageTitle,
-                          ),
-                          const SizedBox(height: AppConstants.spacingMd),
-                          _SummaryGrid(summary: summary),
-                          const SizedBox(height: AppConstants.spacingMd),
-                          Card(
-                            child: Padding(
-                              padding: const EdgeInsets.all(
-                                AppConstants.spacingMd,
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: <Widget>[
-                                  Text(
-                                    'Income vs Expenses — ${now.year}',
-                                    style: AppTextStyles.cardTitle,
-                                  ),
-                                  const SizedBox(
-                                    height: AppConstants.spacingMd,
-                                  ),
-                                  SizedBox(
-                                    height: 220,
-                                    child: _IncomeExpenseBarChart(
-                                      monthlyTotals: summary.monthlyTotals,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                    return SafeArea(
+                      top: false,
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(
+                          AppConstants.pagePaddingMobile,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: <Widget>[
+                            Text(
+                              'Dashboard — ${dashboardRangeLabel(selectedRange)}',
+                              style: AppTextStyles.pageTitle,
                             ),
-                          ),
-                          const SizedBox(height: AppConstants.spacingMd),
-                          if (transactions.isEmpty)
-                            const _EmptyState()
-                          else ...<Widget>[
-                            _ThisMonthByCategoryCard(
-                              rows: categoryRows,
-                              monthLabel: DateFormat('MMM yyyy').format(now),
-                              onCategoryTap: () => router.go(AppRoutes.monthly),
+                            const SizedBox(height: AppConstants.spacingSm),
+                            DropdownButtonFormField<DashboardRange>(
+                              key: ValueKey<DashboardRange>(selectedRange),
+                              initialValue: selectedRange,
+                              decoration: const InputDecoration(
+                                labelText: 'Time Range',
+                              ),
+                              items: DashboardRange.values
+                                  .map(
+                                    (DashboardRange range) =>
+                                        DropdownMenuItem<DashboardRange>(
+                                          value: range,
+                                          child: Text(
+                                            dashboardRangeLabel(range),
+                                          ),
+                                        ),
+                                  )
+                                  .toList(growable: false),
+                              onChanged: (DashboardRange? value) {
+                                if (value != null) {
+                                  ref
+                                          .read(_selectedRangeProvider.notifier)
+                                          .state =
+                                      value;
+                                }
+                              },
                             ),
                             const SizedBox(height: AppConstants.spacingMd),
-                            _RecentTransactionsCard(
-                              recentTransactions: recent,
-                              onSeeAll: () => router.go(AppRoutes.transactions),
+                            _SummaryGrid(summary: summary),
+                            const SizedBox(height: AppConstants.spacingMd),
+                            Card(
+                              child: Padding(
+                                padding: const EdgeInsets.all(
+                                  AppConstants.spacingMd,
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: <Widget>[
+                                    Text(
+                                      'Income vs Expenses — ${dashboardRangeLabel(selectedRange)}',
+                                      style: AppTextStyles.cardTitle,
+                                    ),
+                                    const SizedBox(
+                                      height: AppConstants.spacingMd,
+                                    ),
+                                    SizedBox(
+                                      height: 220,
+                                      child: _IncomeExpenseBarChart(
+                                        monthlyTotals: summary.monthlyTotals,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
+                            const SizedBox(height: AppConstants.spacingMd),
+                            if (rangedTransactions.isEmpty)
+                              const _EmptyState()
+                            else ...<Widget>[
+                              _ThisMonthByCategoryCard(
+                                rows: categoryRows,
+                                monthLabel: dashboardRangeLabel(selectedRange),
+                                onCategoryTap: () =>
+                                    router.go(AppRoutes.monthly),
+                              ),
+                              const SizedBox(height: AppConstants.spacingMd),
+                              _RecentTransactionsCard(
+                                recentTransactions: recent,
+                                onSeeAll: () =>
+                                    router.go(AppRoutes.transactions),
+                              ),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
                     );
                   },
@@ -183,17 +210,12 @@ int _sortByDateDesc(Transaction a, Transaction b) {
   return b.createdAt.compareTo(a.createdAt);
 }
 
-List<_CategoryMonthRow> _buildThisMonthCategoryRows({
+List<_CategoryMonthRow> _buildRangeCategoryRows({
   required List<Transaction> transactions,
   required List<BudgetDefault> budgets,
-  required int year,
-  required int month,
 }) {
   final Map<String, double> actualByCategory = <String, double>{};
   for (final Transaction transaction in transactions) {
-    if (transaction.date.year != year || transaction.date.month != month) {
-      continue;
-    }
     if (isIncome(transaction.category)) {
       continue;
     }
@@ -249,30 +271,30 @@ class _SummaryGrid extends StatelessWidget {
             _SummaryTile(
               width: tileWidth,
               label: 'Income',
-              value: _currencyFormat.format(summary.monthIncome),
+              value: _currencyFormat.format(summary.rangeIncome),
               accent: AppColors.green,
               valueColor: AppColors.green,
             ),
             _SummaryTile(
               width: tileWidth,
               label: 'Expenses',
-              value: _currencyFormat.format(summary.monthExpenses),
+              value: _currencyFormat.format(summary.rangeExpenses),
               accent: AppColors.teal,
               valueColor: AppColors.red,
             ),
             _SummaryTile(
               width: tileWidth,
               label: 'Net',
-              value: _currencyFormat.format(summary.monthNet),
+              value: _currencyFormat.format(summary.rangeNet),
               accent: AppColors.amber,
-              valueColor: summary.monthNet >= 0
+              valueColor: summary.rangeNet >= 0
                   ? AppColors.green
                   : AppColors.red,
             ),
             _SummaryTile(
               width: tileWidth,
               label: 'Business',
-              value: _currencyFormat.format(summary.monthBusiness),
+              value: _currencyFormat.format(summary.rangeBusiness),
               accent: _businessPurple,
               valueColor: AppColors.textMuted,
             ),
@@ -331,20 +353,26 @@ class _SummaryTile extends StatelessWidget {
 class _IncomeExpenseBarChart extends StatelessWidget {
   const _IncomeExpenseBarChart({required this.monthlyTotals});
 
-  final List<MonthlyIncomeExpense> monthlyTotals;
+  final List<RangeIncomeExpense> monthlyTotals;
 
   @override
   Widget build(BuildContext context) {
-    final List<MonthlyIncomeExpense> bars = monthlyTotals.length == 12
+    final List<RangeIncomeExpense> bars = monthlyTotals.isNotEmpty
         ? monthlyTotals
-        : List<MonthlyIncomeExpense>.generate(
-            12,
-            (int index) => (month: index + 1, income: 0, expenses: 0),
-            growable: false,
-          );
+        : <RangeIncomeExpense>[
+            (
+              monthStart: DateTime(
+                DateTime.now().year,
+                DateTime.now().month,
+                1,
+              ),
+              income: 0,
+              expenses: 0,
+            ),
+          ];
     final double maxValue = bars.fold<double>(
       0,
-      (double current, MonthlyIncomeExpense month) =>
+      (double current, RangeIncomeExpense month) =>
           math.max(current, math.max(month.income, month.expenses)),
     );
     final double maxY = maxValue == 0 ? 100 : (maxValue * 1.2).ceilToDouble();
@@ -388,11 +416,14 @@ class _IncomeExpenseBarChart extends StatelessWidget {
               reservedSize: 20,
               getTitlesWidget: (double value, TitleMeta meta) {
                 final int index = value.toInt();
-                if (index < 0 || index >= _monthInitials.length) {
+                if (index < 0 || index >= bars.length) {
                   return const SizedBox.shrink();
                 }
+                final String monthLabel = DateFormat(
+                  'MMM',
+                ).format(bars[index].monthStart);
                 return Text(
-                  _monthInitials[index],
+                  monthLabel.substring(0, 1),
                   style: AppTextStyles.label.copyWith(fontSize: 11),
                 );
               },
@@ -403,7 +434,7 @@ class _IncomeExpenseBarChart extends StatelessWidget {
             .asMap()
             .entries
             .map(
-              (MapEntry<int, MonthlyIncomeExpense> entry) => BarChartGroupData(
+              (MapEntry<int, RangeIncomeExpense> entry) => BarChartGroupData(
                 x: entry.key,
                 barsSpace: 3,
                 barRods: <BarChartRodData>[
@@ -453,7 +484,7 @@ class _ThisMonthByCategoryCard extends StatelessWidget {
           children: <Widget>[
             Row(
               children: <Widget>[
-                Text('This Month by Category', style: AppTextStyles.cardTitle),
+                Text('By Category', style: AppTextStyles.cardTitle),
                 const Spacer(),
                 Text(monthLabel, style: AppTextStyles.label),
               ],
