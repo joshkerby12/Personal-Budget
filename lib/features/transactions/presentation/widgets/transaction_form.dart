@@ -360,11 +360,16 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
                               _maybeApplyDefaultBizPct(defaults);
                               return;
                             }
-                            _autoOpenSubcategoryPicker(
-                              context,
-                              subcategories,
-                              defaults,
-                            );
+                            final bool isMobile =
+                                MediaQuery.sizeOf(context).width <
+                                AppConstants.mobileBreakpoint;
+                            if (isMobile) {
+                              _autoOpenSubcategoryPicker(
+                                context,
+                                subcategories,
+                                defaults,
+                              );
+                            }
                           },
                         );
                       },
