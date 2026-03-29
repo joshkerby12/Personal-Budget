@@ -251,8 +251,8 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
               onClose: widget.onClose,
             ),
             data: (List<BudgetDefault> defaults) {
-              final _CategoryData categoryData = _CategoryData.fromCategories(
-                categories,
+              final _CategoryData categoryData = _CategoryData.fromBudgetDefaults(
+                defaults,
               );
               final ({String category, String subcategory})? suggestion =
                   _buildSuggestion(
@@ -1245,6 +1245,43 @@ class _CategoryData {
   final List<String> parentCategories;
   final Map<String, List<String>> subcategoriesByParent;
 
+  factory _CategoryData.fromBudgetDefaults(List<BudgetDefault> defaults) {
+    // Use only global defaults (month == null) to build the category/subcategory lists.
+    final List<BudgetDefault> globals = defaults
+        .where((BudgetDefault d) => d.month == null)
+        .toList();
+
+    final Map<String, List<BudgetDefault>> grouped = <String, List<BudgetDefault>>{};
+    for (final BudgetDefault d in globals) {
+      grouped.putIfAbsent(d.category, () => <BudgetDefault>[]).add(d);
+    }
+
+    final List<String> parents = grouped.keys.toList()
+      ..sort(compareCategoryOrder);
+
+    final Map<String, List<String>> subcategoriesByParent = <String, List<String>>{};
+    for (final String parent in parents) {
+      final List<BudgetDefault> rows = grouped[parent]!
+        ..sort((BudgetDefault a, BudgetDefault b) => a.subcategory.compareTo(b.subcategory));
+      subcategoriesByParent[parent] = rows
+          .map((BudgetDefault d) => d.subcategory)
+          .toList(growable: false);
+    }
+
+    subcategoriesByParent.putIfAbsent(
+      'Transfers',
+      () => <String>['Credit Card Payment', 'Account Transfer'],
+    );
+    if (!parents.contains('Transfers')) {
+      parents.add('Transfers');
+    }
+
+    return _CategoryData(
+      parentCategories: parents,
+      subcategoriesByParent: subcategoriesByParent,
+    );
+  }
+
   factory _CategoryData.fromCategories(List<Category> categories) {
     final Map<String, List<Category>> grouped = <String, List<Category>>{};
 
@@ -1254,7 +1291,7 @@ class _CategoryData {
           .add(category);
     }
 
-    final List<String> parents = grouped.keys.toList(growable: false)
+    final List<String> parents = grouped.keys.toList()
       ..sort(compareCategoryOrder);
 
     final Map<String, List<String>> subcategoriesByParent =
