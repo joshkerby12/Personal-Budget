@@ -50,15 +50,18 @@ class SettingsMobileScreen extends ConsumerWidget {
         final List<BudgetDefault> budgets =
             budgetsAsync.value ?? const <BudgetDefault>[];
 
-        return Padding(
-          padding: const EdgeInsets.all(AppConstants.pagePaddingMobile),
-          child: SettingsEditor(
-            key: ValueKey<String>('mobile-$orgId'),
-            orgId: orgId,
-            initialSettings: settings,
-            initialBudgets: budgets,
-            isMobile: true,
-            showDataSection: false,
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.all(AppConstants.pagePaddingMobile),
+            child: SettingsEditor(
+              key: ValueKey<String>('mobile-$orgId'),
+              orgId: orgId,
+              initialSettings: settings,
+              initialBudgets: budgets,
+              isMobile: true,
+              showDataSection: false,
+            ),
           ),
         );
       },

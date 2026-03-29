@@ -46,7 +46,8 @@ How every agent must behave at all times, regardless of task. Applies to Claude,
 - Helper files named by responsibility: `[feature]_calculations.dart`, `_validators.dart`, `_formatters.dart`
 - Always update the spec sheet Code Map when adding, moving, or renaming functions
 - Always update `docs/architecture.md` doc tree and spec sheet index after every task — no exceptions
-- Always update `docs/tasks.md` when a task is completed
+- Always update `docs/tasks.md` when a task is completed — mark it `done` and move it to the Completed Tasks table yourself
+- When moving a task to Completed: **delete the entire task detail block** from Active Tasks (everything from the `### TASK-XXX` heading down to the closing `---`). Only the one-line summary row in the Completed Tasks table should remain.
 - A task is not complete until `docs/architecture.md` reflects the current state of the codebase
 
 ---

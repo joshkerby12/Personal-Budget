@@ -15,7 +15,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$Transaction {
 
- String get id;@JsonKey(name: 'org_id') String get orgId;@JsonKey(name: 'created_by') String get createdBy; DateTime get date; double get amount; String get merchant; String? get description; String get category; String get subcategory;@JsonKey(name: 'biz_pct') double get bizPct;@JsonKey(name: 'is_split') bool get isSplit;@JsonKey(name: 'receipt_id') String? get receiptId; String? get notes;@JsonKey(name: 'no_miles') bool get noMiles;@JsonKey(name: 'created_at') DateTime get createdAt;
+ String get id;@JsonKey(name: 'org_id') String get orgId;@JsonKey(name: 'created_by') String get createdBy; DateTime get date; double get amount; String get merchant; String? get description; String get category; String get subcategory;@JsonKey(name: 'biz_pct') double get bizPct;@JsonKey(name: 'is_split') bool get isSplit;@JsonKey(name: 'receipt_id') String? get receiptId; String? get notes; String get source;@JsonKey(name: 'teller_transaction_id') String? get tellerTransactionId;@JsonKey(name: 'csv_import_log_id') String? get csvImportLogId;@JsonKey(name: 'no_miles') bool get noMiles;@JsonKey(name: 'created_at') DateTime get createdAt;
 /// Create a copy of Transaction
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -28,16 +28,16 @@ $TransactionCopyWith<Transaction> get copyWith => _$TransactionCopyWithImpl<Tran
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is Transaction&&(identical(other.id, id) || other.id == id)&&(identical(other.orgId, orgId) || other.orgId == orgId)&&(identical(other.createdBy, createdBy) || other.createdBy == createdBy)&&(identical(other.date, date) || other.date == date)&&(identical(other.amount, amount) || other.amount == amount)&&(identical(other.merchant, merchant) || other.merchant == merchant)&&(identical(other.description, description) || other.description == description)&&(identical(other.category, category) || other.category == category)&&(identical(other.subcategory, subcategory) || other.subcategory == subcategory)&&(identical(other.bizPct, bizPct) || other.bizPct == bizPct)&&(identical(other.isSplit, isSplit) || other.isSplit == isSplit)&&(identical(other.receiptId, receiptId) || other.receiptId == receiptId)&&(identical(other.notes, notes) || other.notes == notes)&&(identical(other.noMiles, noMiles) || other.noMiles == noMiles)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is Transaction&&(identical(other.id, id) || other.id == id)&&(identical(other.orgId, orgId) || other.orgId == orgId)&&(identical(other.createdBy, createdBy) || other.createdBy == createdBy)&&(identical(other.date, date) || other.date == date)&&(identical(other.amount, amount) || other.amount == amount)&&(identical(other.merchant, merchant) || other.merchant == merchant)&&(identical(other.description, description) || other.description == description)&&(identical(other.category, category) || other.category == category)&&(identical(other.subcategory, subcategory) || other.subcategory == subcategory)&&(identical(other.bizPct, bizPct) || other.bizPct == bizPct)&&(identical(other.isSplit, isSplit) || other.isSplit == isSplit)&&(identical(other.receiptId, receiptId) || other.receiptId == receiptId)&&(identical(other.notes, notes) || other.notes == notes)&&(identical(other.source, source) || other.source == source)&&(identical(other.tellerTransactionId, tellerTransactionId) || other.tellerTransactionId == tellerTransactionId)&&(identical(other.csvImportLogId, csvImportLogId) || other.csvImportLogId == csvImportLogId)&&(identical(other.noMiles, noMiles) || other.noMiles == noMiles)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,orgId,createdBy,date,amount,merchant,description,category,subcategory,bizPct,isSplit,receiptId,notes,noMiles,createdAt);
+int get hashCode => Object.hash(runtimeType,id,orgId,createdBy,date,amount,merchant,description,category,subcategory,bizPct,isSplit,receiptId,notes,source,tellerTransactionId,csvImportLogId,noMiles,createdAt);
 
 @override
 String toString() {
-  return 'Transaction(id: $id, orgId: $orgId, createdBy: $createdBy, date: $date, amount: $amount, merchant: $merchant, description: $description, category: $category, subcategory: $subcategory, bizPct: $bizPct, isSplit: $isSplit, receiptId: $receiptId, notes: $notes, noMiles: $noMiles, createdAt: $createdAt)';
+  return 'Transaction(id: $id, orgId: $orgId, createdBy: $createdBy, date: $date, amount: $amount, merchant: $merchant, description: $description, category: $category, subcategory: $subcategory, bizPct: $bizPct, isSplit: $isSplit, receiptId: $receiptId, notes: $notes, source: $source, tellerTransactionId: $tellerTransactionId, csvImportLogId: $csvImportLogId, noMiles: $noMiles, createdAt: $createdAt)';
 }
 
 
@@ -48,7 +48,7 @@ abstract mixin class $TransactionCopyWith<$Res>  {
   factory $TransactionCopyWith(Transaction value, $Res Function(Transaction) _then) = _$TransactionCopyWithImpl;
 @useResult
 $Res call({
- String id,@JsonKey(name: 'org_id') String orgId,@JsonKey(name: 'created_by') String createdBy, DateTime date, double amount, String merchant, String? description, String category, String subcategory,@JsonKey(name: 'biz_pct') double bizPct,@JsonKey(name: 'is_split') bool isSplit,@JsonKey(name: 'receipt_id') String? receiptId, String? notes,@JsonKey(name: 'no_miles') bool noMiles,@JsonKey(name: 'created_at') DateTime createdAt
+ String id,@JsonKey(name: 'org_id') String orgId,@JsonKey(name: 'created_by') String createdBy, DateTime date, double amount, String merchant, String? description, String category, String subcategory,@JsonKey(name: 'biz_pct') double bizPct,@JsonKey(name: 'is_split') bool isSplit,@JsonKey(name: 'receipt_id') String? receiptId, String? notes, String source,@JsonKey(name: 'teller_transaction_id') String? tellerTransactionId,@JsonKey(name: 'csv_import_log_id') String? csvImportLogId,@JsonKey(name: 'no_miles') bool noMiles,@JsonKey(name: 'created_at') DateTime createdAt
 });
 
 
@@ -65,7 +65,7 @@ class _$TransactionCopyWithImpl<$Res>
 
 /// Create a copy of Transaction
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? orgId = null,Object? createdBy = null,Object? date = null,Object? amount = null,Object? merchant = null,Object? description = freezed,Object? category = null,Object? subcategory = null,Object? bizPct = null,Object? isSplit = null,Object? receiptId = freezed,Object? notes = freezed,Object? noMiles = null,Object? createdAt = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? orgId = null,Object? createdBy = null,Object? date = null,Object? amount = null,Object? merchant = null,Object? description = freezed,Object? category = null,Object? subcategory = null,Object? bizPct = null,Object? isSplit = null,Object? receiptId = freezed,Object? notes = freezed,Object? source = null,Object? tellerTransactionId = freezed,Object? csvImportLogId = freezed,Object? noMiles = null,Object? createdAt = null,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,orgId: null == orgId ? _self.orgId : orgId // ignore: cast_nullable_to_non_nullable
@@ -80,6 +80,9 @@ as String,bizPct: null == bizPct ? _self.bizPct : bizPct // ignore: cast_nullabl
 as double,isSplit: null == isSplit ? _self.isSplit : isSplit // ignore: cast_nullable_to_non_nullable
 as bool,receiptId: freezed == receiptId ? _self.receiptId : receiptId // ignore: cast_nullable_to_non_nullable
 as String?,notes: freezed == notes ? _self.notes : notes // ignore: cast_nullable_to_non_nullable
+as String?,source: null == source ? _self.source : source // ignore: cast_nullable_to_non_nullable
+as String,tellerTransactionId: freezed == tellerTransactionId ? _self.tellerTransactionId : tellerTransactionId // ignore: cast_nullable_to_non_nullable
+as String?,csvImportLogId: freezed == csvImportLogId ? _self.csvImportLogId : csvImportLogId // ignore: cast_nullable_to_non_nullable
 as String?,noMiles: null == noMiles ? _self.noMiles : noMiles // ignore: cast_nullable_to_non_nullable
 as bool,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
 as DateTime,
@@ -167,10 +170,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id, @JsonKey(name: 'org_id')  String orgId, @JsonKey(name: 'created_by')  String createdBy,  DateTime date,  double amount,  String merchant,  String? description,  String category,  String subcategory, @JsonKey(name: 'biz_pct')  double bizPct, @JsonKey(name: 'is_split')  bool isSplit, @JsonKey(name: 'receipt_id')  String? receiptId,  String? notes, @JsonKey(name: 'no_miles')  bool noMiles, @JsonKey(name: 'created_at')  DateTime createdAt)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id, @JsonKey(name: 'org_id')  String orgId, @JsonKey(name: 'created_by')  String createdBy,  DateTime date,  double amount,  String merchant,  String? description,  String category,  String subcategory, @JsonKey(name: 'biz_pct')  double bizPct, @JsonKey(name: 'is_split')  bool isSplit, @JsonKey(name: 'receipt_id')  String? receiptId,  String? notes,  String source, @JsonKey(name: 'teller_transaction_id')  String? tellerTransactionId, @JsonKey(name: 'csv_import_log_id')  String? csvImportLogId, @JsonKey(name: 'no_miles')  bool noMiles, @JsonKey(name: 'created_at')  DateTime createdAt)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _Transaction() when $default != null:
-return $default(_that.id,_that.orgId,_that.createdBy,_that.date,_that.amount,_that.merchant,_that.description,_that.category,_that.subcategory,_that.bizPct,_that.isSplit,_that.receiptId,_that.notes,_that.noMiles,_that.createdAt);case _:
+return $default(_that.id,_that.orgId,_that.createdBy,_that.date,_that.amount,_that.merchant,_that.description,_that.category,_that.subcategory,_that.bizPct,_that.isSplit,_that.receiptId,_that.notes,_that.source,_that.tellerTransactionId,_that.csvImportLogId,_that.noMiles,_that.createdAt);case _:
   return orElse();
 
 }
@@ -188,10 +191,10 @@ return $default(_that.id,_that.orgId,_that.createdBy,_that.date,_that.amount,_th
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id, @JsonKey(name: 'org_id')  String orgId, @JsonKey(name: 'created_by')  String createdBy,  DateTime date,  double amount,  String merchant,  String? description,  String category,  String subcategory, @JsonKey(name: 'biz_pct')  double bizPct, @JsonKey(name: 'is_split')  bool isSplit, @JsonKey(name: 'receipt_id')  String? receiptId,  String? notes, @JsonKey(name: 'no_miles')  bool noMiles, @JsonKey(name: 'created_at')  DateTime createdAt)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id, @JsonKey(name: 'org_id')  String orgId, @JsonKey(name: 'created_by')  String createdBy,  DateTime date,  double amount,  String merchant,  String? description,  String category,  String subcategory, @JsonKey(name: 'biz_pct')  double bizPct, @JsonKey(name: 'is_split')  bool isSplit, @JsonKey(name: 'receipt_id')  String? receiptId,  String? notes,  String source, @JsonKey(name: 'teller_transaction_id')  String? tellerTransactionId, @JsonKey(name: 'csv_import_log_id')  String? csvImportLogId, @JsonKey(name: 'no_miles')  bool noMiles, @JsonKey(name: 'created_at')  DateTime createdAt)  $default,) {final _that = this;
 switch (_that) {
 case _Transaction():
-return $default(_that.id,_that.orgId,_that.createdBy,_that.date,_that.amount,_that.merchant,_that.description,_that.category,_that.subcategory,_that.bizPct,_that.isSplit,_that.receiptId,_that.notes,_that.noMiles,_that.createdAt);case _:
+return $default(_that.id,_that.orgId,_that.createdBy,_that.date,_that.amount,_that.merchant,_that.description,_that.category,_that.subcategory,_that.bizPct,_that.isSplit,_that.receiptId,_that.notes,_that.source,_that.tellerTransactionId,_that.csvImportLogId,_that.noMiles,_that.createdAt);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -208,10 +211,10 @@ return $default(_that.id,_that.orgId,_that.createdBy,_that.date,_that.amount,_th
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id, @JsonKey(name: 'org_id')  String orgId, @JsonKey(name: 'created_by')  String createdBy,  DateTime date,  double amount,  String merchant,  String? description,  String category,  String subcategory, @JsonKey(name: 'biz_pct')  double bizPct, @JsonKey(name: 'is_split')  bool isSplit, @JsonKey(name: 'receipt_id')  String? receiptId,  String? notes, @JsonKey(name: 'no_miles')  bool noMiles, @JsonKey(name: 'created_at')  DateTime createdAt)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id, @JsonKey(name: 'org_id')  String orgId, @JsonKey(name: 'created_by')  String createdBy,  DateTime date,  double amount,  String merchant,  String? description,  String category,  String subcategory, @JsonKey(name: 'biz_pct')  double bizPct, @JsonKey(name: 'is_split')  bool isSplit, @JsonKey(name: 'receipt_id')  String? receiptId,  String? notes,  String source, @JsonKey(name: 'teller_transaction_id')  String? tellerTransactionId, @JsonKey(name: 'csv_import_log_id')  String? csvImportLogId, @JsonKey(name: 'no_miles')  bool noMiles, @JsonKey(name: 'created_at')  DateTime createdAt)?  $default,) {final _that = this;
 switch (_that) {
 case _Transaction() when $default != null:
-return $default(_that.id,_that.orgId,_that.createdBy,_that.date,_that.amount,_that.merchant,_that.description,_that.category,_that.subcategory,_that.bizPct,_that.isSplit,_that.receiptId,_that.notes,_that.noMiles,_that.createdAt);case _:
+return $default(_that.id,_that.orgId,_that.createdBy,_that.date,_that.amount,_that.merchant,_that.description,_that.category,_that.subcategory,_that.bizPct,_that.isSplit,_that.receiptId,_that.notes,_that.source,_that.tellerTransactionId,_that.csvImportLogId,_that.noMiles,_that.createdAt);case _:
   return null;
 
 }
@@ -223,7 +226,7 @@ return $default(_that.id,_that.orgId,_that.createdBy,_that.date,_that.amount,_th
 @JsonSerializable()
 
 class _Transaction implements Transaction {
-  const _Transaction({required this.id, @JsonKey(name: 'org_id') required this.orgId, @JsonKey(name: 'created_by') required this.createdBy, required this.date, required this.amount, required this.merchant, this.description, required this.category, required this.subcategory, @JsonKey(name: 'biz_pct') required this.bizPct, @JsonKey(name: 'is_split') required this.isSplit, @JsonKey(name: 'receipt_id') this.receiptId, this.notes, @JsonKey(name: 'no_miles') this.noMiles = false, @JsonKey(name: 'created_at') required this.createdAt});
+  const _Transaction({required this.id, @JsonKey(name: 'org_id') required this.orgId, @JsonKey(name: 'created_by') required this.createdBy, required this.date, required this.amount, required this.merchant, this.description, required this.category, required this.subcategory, @JsonKey(name: 'biz_pct') required this.bizPct, @JsonKey(name: 'is_split') required this.isSplit, @JsonKey(name: 'receipt_id') this.receiptId, this.notes, this.source = 'manual', @JsonKey(name: 'teller_transaction_id') this.tellerTransactionId, @JsonKey(name: 'csv_import_log_id') this.csvImportLogId, @JsonKey(name: 'no_miles') this.noMiles = false, @JsonKey(name: 'created_at') required this.createdAt});
   factory _Transaction.fromJson(Map<String, dynamic> json) => _$TransactionFromJson(json);
 
 @override final  String id;
@@ -239,6 +242,9 @@ class _Transaction implements Transaction {
 @override@JsonKey(name: 'is_split') final  bool isSplit;
 @override@JsonKey(name: 'receipt_id') final  String? receiptId;
 @override final  String? notes;
+@override@JsonKey() final  String source;
+@override@JsonKey(name: 'teller_transaction_id') final  String? tellerTransactionId;
+@override@JsonKey(name: 'csv_import_log_id') final  String? csvImportLogId;
 @override@JsonKey(name: 'no_miles') final  bool noMiles;
 @override@JsonKey(name: 'created_at') final  DateTime createdAt;
 
@@ -255,16 +261,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Transaction&&(identical(other.id, id) || other.id == id)&&(identical(other.orgId, orgId) || other.orgId == orgId)&&(identical(other.createdBy, createdBy) || other.createdBy == createdBy)&&(identical(other.date, date) || other.date == date)&&(identical(other.amount, amount) || other.amount == amount)&&(identical(other.merchant, merchant) || other.merchant == merchant)&&(identical(other.description, description) || other.description == description)&&(identical(other.category, category) || other.category == category)&&(identical(other.subcategory, subcategory) || other.subcategory == subcategory)&&(identical(other.bizPct, bizPct) || other.bizPct == bizPct)&&(identical(other.isSplit, isSplit) || other.isSplit == isSplit)&&(identical(other.receiptId, receiptId) || other.receiptId == receiptId)&&(identical(other.notes, notes) || other.notes == notes)&&(identical(other.noMiles, noMiles) || other.noMiles == noMiles)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Transaction&&(identical(other.id, id) || other.id == id)&&(identical(other.orgId, orgId) || other.orgId == orgId)&&(identical(other.createdBy, createdBy) || other.createdBy == createdBy)&&(identical(other.date, date) || other.date == date)&&(identical(other.amount, amount) || other.amount == amount)&&(identical(other.merchant, merchant) || other.merchant == merchant)&&(identical(other.description, description) || other.description == description)&&(identical(other.category, category) || other.category == category)&&(identical(other.subcategory, subcategory) || other.subcategory == subcategory)&&(identical(other.bizPct, bizPct) || other.bizPct == bizPct)&&(identical(other.isSplit, isSplit) || other.isSplit == isSplit)&&(identical(other.receiptId, receiptId) || other.receiptId == receiptId)&&(identical(other.notes, notes) || other.notes == notes)&&(identical(other.source, source) || other.source == source)&&(identical(other.tellerTransactionId, tellerTransactionId) || other.tellerTransactionId == tellerTransactionId)&&(identical(other.csvImportLogId, csvImportLogId) || other.csvImportLogId == csvImportLogId)&&(identical(other.noMiles, noMiles) || other.noMiles == noMiles)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,orgId,createdBy,date,amount,merchant,description,category,subcategory,bizPct,isSplit,receiptId,notes,noMiles,createdAt);
+int get hashCode => Object.hash(runtimeType,id,orgId,createdBy,date,amount,merchant,description,category,subcategory,bizPct,isSplit,receiptId,notes,source,tellerTransactionId,csvImportLogId,noMiles,createdAt);
 
 @override
 String toString() {
-  return 'Transaction(id: $id, orgId: $orgId, createdBy: $createdBy, date: $date, amount: $amount, merchant: $merchant, description: $description, category: $category, subcategory: $subcategory, bizPct: $bizPct, isSplit: $isSplit, receiptId: $receiptId, notes: $notes, noMiles: $noMiles, createdAt: $createdAt)';
+  return 'Transaction(id: $id, orgId: $orgId, createdBy: $createdBy, date: $date, amount: $amount, merchant: $merchant, description: $description, category: $category, subcategory: $subcategory, bizPct: $bizPct, isSplit: $isSplit, receiptId: $receiptId, notes: $notes, source: $source, tellerTransactionId: $tellerTransactionId, csvImportLogId: $csvImportLogId, noMiles: $noMiles, createdAt: $createdAt)';
 }
 
 
@@ -275,7 +281,7 @@ abstract mixin class _$TransactionCopyWith<$Res> implements $TransactionCopyWith
   factory _$TransactionCopyWith(_Transaction value, $Res Function(_Transaction) _then) = __$TransactionCopyWithImpl;
 @override @useResult
 $Res call({
- String id,@JsonKey(name: 'org_id') String orgId,@JsonKey(name: 'created_by') String createdBy, DateTime date, double amount, String merchant, String? description, String category, String subcategory,@JsonKey(name: 'biz_pct') double bizPct,@JsonKey(name: 'is_split') bool isSplit,@JsonKey(name: 'receipt_id') String? receiptId, String? notes,@JsonKey(name: 'no_miles') bool noMiles,@JsonKey(name: 'created_at') DateTime createdAt
+ String id,@JsonKey(name: 'org_id') String orgId,@JsonKey(name: 'created_by') String createdBy, DateTime date, double amount, String merchant, String? description, String category, String subcategory,@JsonKey(name: 'biz_pct') double bizPct,@JsonKey(name: 'is_split') bool isSplit,@JsonKey(name: 'receipt_id') String? receiptId, String? notes, String source,@JsonKey(name: 'teller_transaction_id') String? tellerTransactionId,@JsonKey(name: 'csv_import_log_id') String? csvImportLogId,@JsonKey(name: 'no_miles') bool noMiles,@JsonKey(name: 'created_at') DateTime createdAt
 });
 
 
@@ -292,7 +298,7 @@ class __$TransactionCopyWithImpl<$Res>
 
 /// Create a copy of Transaction
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? orgId = null,Object? createdBy = null,Object? date = null,Object? amount = null,Object? merchant = null,Object? description = freezed,Object? category = null,Object? subcategory = null,Object? bizPct = null,Object? isSplit = null,Object? receiptId = freezed,Object? notes = freezed,Object? noMiles = null,Object? createdAt = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? orgId = null,Object? createdBy = null,Object? date = null,Object? amount = null,Object? merchant = null,Object? description = freezed,Object? category = null,Object? subcategory = null,Object? bizPct = null,Object? isSplit = null,Object? receiptId = freezed,Object? notes = freezed,Object? source = null,Object? tellerTransactionId = freezed,Object? csvImportLogId = freezed,Object? noMiles = null,Object? createdAt = null,}) {
   return _then(_Transaction(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,orgId: null == orgId ? _self.orgId : orgId // ignore: cast_nullable_to_non_nullable
@@ -307,6 +313,9 @@ as String,bizPct: null == bizPct ? _self.bizPct : bizPct // ignore: cast_nullabl
 as double,isSplit: null == isSplit ? _self.isSplit : isSplit // ignore: cast_nullable_to_non_nullable
 as bool,receiptId: freezed == receiptId ? _self.receiptId : receiptId // ignore: cast_nullable_to_non_nullable
 as String?,notes: freezed == notes ? _self.notes : notes // ignore: cast_nullable_to_non_nullable
+as String?,source: null == source ? _self.source : source // ignore: cast_nullable_to_non_nullable
+as String,tellerTransactionId: freezed == tellerTransactionId ? _self.tellerTransactionId : tellerTransactionId // ignore: cast_nullable_to_non_nullable
+as String?,csvImportLogId: freezed == csvImportLogId ? _self.csvImportLogId : csvImportLogId // ignore: cast_nullable_to_non_nullable
 as String?,noMiles: null == noMiles ? _self.noMiles : noMiles // ignore: cast_nullable_to_non_nullable
 as bool,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
 as DateTime,

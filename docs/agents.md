@@ -29,7 +29,7 @@ Who the agents are, what they own, and how they hand off.
 - Executing tasks assigned in `docs/tasks.md`
 - Writing and editing code within defined spec
 - Running terminal commands (`flutter pub get`, `build_runner`, `supabase` CLI)
-- Marking tasks complete in `docs/tasks.md`
+- Marking tasks `done` in `docs/tasks.md` and moving them to the Completed Tasks table
 - Logging blockers in `docs/errors.md`
 - Following folder conventions from `docs/architecture.md`
 

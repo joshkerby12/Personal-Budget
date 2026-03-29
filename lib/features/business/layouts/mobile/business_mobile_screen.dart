@@ -66,55 +66,58 @@ class BusinessMobileScreen extends ConsumerWidget {
                 summary.mileageDeductibleMiles == 0 &&
                 summary.mileageDeductionValue == 0;
 
-            return Padding(
-              padding: const EdgeInsets.all(AppConstants.pagePaddingMobile),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  Text('Business Summary', style: AppTextStyles.pageTitle),
-                  const SizedBox(height: AppConstants.spacingSm),
-                  BusinessFilterBar(
-                    selectedYear: selectedYear,
-                    selectedMonth: selectedMonth,
-                    onYearChanged: (int? value) {
-                      ref.read(_yearFilterProvider.notifier).state = value;
-                      if (value == null) {
-                        ref.read(_monthFilterProvider.notifier).state = null;
-                      }
-                    },
-                    onMonthChanged: (int? value) {
-                      ref.read(_monthFilterProvider.notifier).state = value;
-                    },
-                  ),
-                  const SizedBox(height: AppConstants.spacingMd),
-                  if (showEmptyState)
-                    const Expanded(child: _EmptyState())
-                  else
-                    Expanded(
-                      child: SingleChildScrollView(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: <Widget>[
-                            _SummaryGrid(
-                              summary: summary,
-                              currencyFormat: _currencyFormat,
-                            ),
-                            const SizedBox(height: AppConstants.spacingMd),
-                            _MileageCard(
-                              summary: summary,
-                              currencyFormat: _currencyFormat,
-                              irsRateFormat: _irsRateFormat,
-                            ),
-                            const SizedBox(height: AppConstants.spacingMd),
-                            _ByCategoryCard(
-                              summary: summary,
-                              currencyFormat: _currencyFormat,
-                            ),
-                          ],
+            return SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.all(AppConstants.pagePaddingMobile),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    Text('Business Summary', style: AppTextStyles.pageTitle),
+                    const SizedBox(height: AppConstants.spacingSm),
+                    BusinessFilterBar(
+                      selectedYear: selectedYear,
+                      selectedMonth: selectedMonth,
+                      onYearChanged: (int? value) {
+                        ref.read(_yearFilterProvider.notifier).state = value;
+                        if (value == null) {
+                          ref.read(_monthFilterProvider.notifier).state = null;
+                        }
+                      },
+                      onMonthChanged: (int? value) {
+                        ref.read(_monthFilterProvider.notifier).state = value;
+                      },
+                    ),
+                    const SizedBox(height: AppConstants.spacingMd),
+                    if (showEmptyState)
+                      const Expanded(child: _EmptyState())
+                    else
+                      Expanded(
+                        child: SingleChildScrollView(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: <Widget>[
+                              _SummaryGrid(
+                                summary: summary,
+                                currencyFormat: _currencyFormat,
+                              ),
+                              const SizedBox(height: AppConstants.spacingMd),
+                              _MileageCard(
+                                summary: summary,
+                                currencyFormat: _currencyFormat,
+                                irsRateFormat: _irsRateFormat,
+                              ),
+                              const SizedBox(height: AppConstants.spacingMd),
+                              _ByCategoryCard(
+                                summary: summary,
+                                currencyFormat: _currencyFormat,
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
             );
           },

@@ -79,6 +79,12 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
   final Map<String, TextEditingController> _milesControllers =
       <String, TextEditingController>{};
   final Map<String, bool> _roundTripStates = <String, bool>{};
+  final TextEditingController _newSubcategoryNameController =
+      TextEditingController();
+  final TextEditingController _newSubcategoryBudgetController =
+      TextEditingController();
+  final Map<String, double?> _lastMonthSpendByRowKey = <String, double?>{};
+  String? _addingSubcategoryCategory;
 
   late final int _selectedYear;
 
@@ -106,6 +112,8 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
     _inlineController?.dispose();
     _inlineBizPctController?.dispose();
     _disposeMilesControllers();
+    _newSubcategoryNameController.dispose();
+    _newSubcategoryBudgetController.dispose();
     super.dispose();
   }
 
@@ -154,6 +162,8 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
     MonthlyBudgetData data,
   ) {
     final Map<String, List<MonthlyRow>> groupedRows = _groupRows(data.rows);
+    final Map<String, List<Transaction>> transactionsByRowKey =
+        _groupTransactionsByRowKey(data.transactions);
 
     // Auto-collapse all categories on mobile if none have been manually toggled
     if (widget.isMobile &&
@@ -225,12 +235,15 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
         ],
         if (widget.isMobile)
           _buildMobileCategoryGroups(
-            Map<String, List<MonthlyRow>>.fromEntries(
+            orgId: orgId,
+            data: data,
+            groupedRows: Map<String, List<MonthlyRow>>.fromEntries(
               groupedRows.entries.where(
                 (MapEntry<String, List<MonthlyRow>> e) => !isTransfer(e.key),
               ),
             ),
-            data.categorySubtotals,
+            subtotals: data.categorySubtotals,
+            transactionsByRowKey: transactionsByRowKey,
           )
         else ...<Widget>[
           _buildSummaryCharts(data),
@@ -252,7 +265,13 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
           ),
           if (missingMilesTransactions.isNotEmpty)
             const SizedBox(height: AppConstants.spacingMd),
-          _buildDesktopTable(orgId, data, groupedRows, data.categorySubtotals),
+          _buildDesktopTable(
+            orgId,
+            data,
+            groupedRows,
+            data.categorySubtotals,
+            transactionsByRowKey,
+          ),
         ],
         const SizedBox(height: AppConstants.spacingMd),
         if (data.isOverBudget) ...<Widget>[
@@ -454,10 +473,14 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
     );
   }
 
-  Widget _buildMobileCategoryGroups(
-    Map<String, List<MonthlyRow>> groupedRows,
-    Map<String, ({double budget, double actual, double business})> subtotals,
-  ) {
+  Widget _buildMobileCategoryGroups({
+    required String orgId,
+    required MonthlyBudgetData data,
+    required Map<String, List<MonthlyRow>> groupedRows,
+    required Map<String, ({double budget, double actual, double business})>
+    subtotals,
+    required Map<String, List<Transaction>> transactionsByRowKey,
+  }) {
     if (groupedRows.isEmpty) {
       return const SizedBox.shrink();
     }
@@ -580,15 +603,35 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
                                             ),
                                             child: _buildMobileRow(
                                               context,
-                                              row,
-                                              isEditing,
+                                              orgId: orgId,
+                                              data: data,
+                                              row: row,
+                                              isEditing: isEditing,
                                               isEdited: editedKeys.contains(
                                                 row.key,
                                               ),
+                                              transactions:
+                                                  transactionsByRowKey[row
+                                                      .key] ??
+                                                  const <Transaction>[],
                                             ),
                                           ),
                                         )
                                         .toList(growable: false),
+                                  ),
+                                ),
+                              if (!isCollapsed)
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: TextButton.icon(
+                                    onPressed: () => _showAddSubcategorySheet(
+                                      context,
+                                      orgId: orgId,
+                                      data: data,
+                                      category: category,
+                                    ),
+                                    icon: const Icon(Icons.add, size: 16),
+                                    label: const Text('Add subcategory'),
                                   ),
                                 ),
                             ],
@@ -606,74 +649,253 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
   }
 
   Widget _buildMobileRow(
-    BuildContext context,
-    MonthlyRow row,
-    bool isEditing, {
+    BuildContext context, {
+    required String orgId,
+    required MonthlyBudgetData data,
+    required MonthlyRow row,
+    required bool isEditing,
     required bool isEdited,
+    required List<Transaction> transactions,
   }) {
     final bool hasBudget = row.budget > 0;
 
-    return InkWell(
-      onTap: isEditing ? () => _editMobileRowBudget(context, row) : null,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(AppConstants.spacingSm),
-        decoration: BoxDecoration(
-          color: isEdited ? AppColors.amberFill : AppColors.white,
-          borderRadius: BorderRadius.circular(AppConstants.spacingSm),
-          border: Border(
-            left: BorderSide(
-              color: row.hasCustomBudget ? AppColors.amber : AppColors.border,
-              width: row.hasCustomBudget ? 3 : 1,
+    return ValueListenableBuilder<Set<String>>(
+      valueListenable: _expandedSubcategoryKeysNotifier,
+      builder: (BuildContext context, Set<String> expanded, _) {
+        final bool isExpanded = expanded.contains(row.key);
+        final bool hasTransactions = transactions.isNotEmpty;
+        final double? suggestedBudget = _lastMonthSpendByRowKey[row.key];
+
+        return InkWell(
+          onTap: hasTransactions
+              ? () => _toggleSubcategoryExpanded(
+                  row: row,
+                  orgId: orgId,
+                  data: data,
+                )
+              : null,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(AppConstants.spacingSm),
+            decoration: BoxDecoration(
+              color: isEdited ? AppColors.amberFill : AppColors.white,
+              borderRadius: BorderRadius.circular(AppConstants.spacingSm),
+              border: Border(
+                left: BorderSide(
+                  color: row.hasCustomBudget
+                      ? AppColors.amber
+                      : AppColors.border,
+                  width: row.hasCustomBudget ? 3 : 1,
+                ),
+                top: const BorderSide(color: AppColors.border),
+                right: const BorderSide(color: AppColors.border),
+                bottom: const BorderSide(color: AppColors.border),
+              ),
             ),
-            top: const BorderSide(color: AppColors.border),
-            right: const BorderSide(color: AppColors.border),
-            bottom: const BorderSide(color: AppColors.border),
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Expanded(
-                  child: Text(row.subcategory, style: AppTextStyles.cardTitle),
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Text(
+                        row.subcategory,
+                        style: AppTextStyles.cardTitle,
+                      ),
+                    ),
+                    if (row.isMonthScoped)
+                      PopupMenuButton<String>(
+                        tooltip: 'More',
+                        icon: const Icon(
+                          Icons.more_vert,
+                          size: 18,
+                          color: AppColors.textMuted,
+                        ),
+                        onSelected: (String action) {
+                          if (action == 'rename') {
+                            _renameMonthScopedSubcategory(
+                              context,
+                              orgId: orgId,
+                              data: data,
+                              row: row,
+                            );
+                          } else if (action == 'delete') {
+                            _deleteMonthScopedSubcategory(
+                              context,
+                              orgId: orgId,
+                              data: data,
+                              row: row,
+                            );
+                          }
+                        },
+                        itemBuilder: (BuildContext context) {
+                          return const <PopupMenuEntry<String>>[
+                            PopupMenuItem<String>(
+                              value: 'rename',
+                              child: Text('Rename'),
+                            ),
+                            PopupMenuItem<String>(
+                              value: 'delete',
+                              child: Text('Delete'),
+                            ),
+                          ];
+                        },
+                      ),
+                    IconButton(
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 28,
+                        minHeight: 28,
+                      ),
+                      tooltip: 'Edit budget for this month',
+                      icon: Icon(
+                        Icons.edit_outlined,
+                        size: 18,
+                        color: isEditing ? AppColors.amber : AppColors.teal,
+                      ),
+                      onPressed: () => _editMobileRowBudget(
+                        context,
+                        orgId: orgId,
+                        data: data,
+                        row: row,
+                      ),
+                    ),
+                    if (hasTransactions)
+                      Icon(
+                        isExpanded
+                            ? Icons.keyboard_arrow_down
+                            : Icons.keyboard_arrow_right,
+                        size: 18,
+                        color: AppColors.textMuted,
+                      ),
+                    const SizedBox(width: 4),
+                    Text(
+                      _formatCurrency(row.remaining),
+                      style: AppTextStyles.body.copyWith(
+                        color: row.remaining >= 0
+                            ? AppColors.green
+                            : AppColors.red,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
                 ),
-                if (isEditing)
-                  const Icon(
-                    Icons.edit_outlined,
-                    size: 18,
-                    color: AppColors.amber,
-                  ),
+                const SizedBox(height: AppConstants.spacingXs),
                 Text(
-                  _formatCurrency(row.remaining),
-                  style: AppTextStyles.body.copyWith(
-                    color: row.remaining >= 0 ? AppColors.green : AppColors.red,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  'Budget: ${_formatBudget(row.budget)} | '
+                  'Actual: ${_formatCurrency(row.actual)}',
+                  style: AppTextStyles.body.copyWith(fontSize: 13),
                 ),
+                const SizedBox(height: AppConstants.spacingXs),
+                Text(
+                  'Personal: ${_formatCurrency(row.personal)} | '
+                  'Business: ${_formatCurrency(row.business)} | '
+                  'Biz: ${(row.bizPct * 100).toStringAsFixed(0)}%',
+                  style: AppTextStyles.label.copyWith(color: AppColors.text),
+                ),
+                if (hasBudget) ...<Widget>[
+                  const SizedBox(height: AppConstants.spacingXs),
+                  _ProgressBar(budget: row.budget, actual: row.actual),
+                ],
+                if (isExpanded && hasTransactions) ...<Widget>[
+                  const SizedBox(height: AppConstants.spacingSm),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF7FAFC),
+                      borderRadius: BorderRadius.circular(
+                        AppConstants.spacingXs,
+                      ),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Column(
+                      children: transactions
+                          .asMap()
+                          .entries
+                          .map((MapEntry<int, Transaction> entry) {
+                            final Transaction transaction = entry.value;
+                            final String merchant =
+                                transaction.merchant.trim().isEmpty
+                                ? '—'
+                                : transaction.merchant;
+                            return InkWell(
+                              onTap: () async {
+                                await showTransactionForm(
+                                  context,
+                                  orgId: orgId,
+                                  initialTransaction: transaction,
+                                );
+                                if (!mounted) {
+                                  return;
+                                }
+                                ref.invalidate(
+                                  monthlyBudgetDataProvider(
+                                    orgId,
+                                    data.year,
+                                    data.month,
+                                  ),
+                                );
+                              },
+                              child: Container(
+                                color: entry.key.isEven
+                                    ? AppColors.white
+                                    : AppColors.lightGray,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: AppConstants.spacingSm,
+                                  vertical: AppConstants.spacingXs,
+                                ),
+                                child: Row(
+                                  children: <Widget>[
+                                    Text(
+                                      _transactionDate.format(transaction.date),
+                                      style: AppTextStyles.label.copyWith(
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                    const SizedBox(
+                                      width: AppConstants.spacingSm,
+                                    ),
+                                    Expanded(
+                                      child: Text(
+                                        merchant,
+                                        style: AppTextStyles.body.copyWith(
+                                          fontSize: 12,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    Text(
+                                      _formatCurrency(transaction.amount),
+                                      style: AppTextStyles.body.copyWith(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          })
+                          .toList(growable: false),
+                    ),
+                  ),
+                  if (suggestedBudget != null &&
+                      suggestedBudget > 0) ...<Widget>[
+                    const SizedBox(height: AppConstants.spacingXs),
+                    Text(
+                      "Suggested budget: ${_formatCurrency(suggestedBudget)} "
+                      "(based on last month's spending)",
+                      style: AppTextStyles.label.copyWith(
+                        color: AppColors.textMuted,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ],
               ],
             ),
-            const SizedBox(height: AppConstants.spacingXs),
-            Text(
-              'Budget: ${_formatBudget(row.budget)} | '
-              'Actual: ${_formatCurrency(row.actual)}',
-              style: AppTextStyles.body.copyWith(fontSize: 13),
-            ),
-            const SizedBox(height: AppConstants.spacingXs),
-            Text(
-              'Personal: ${_formatCurrency(row.personal)} | '
-              'Business: ${_formatCurrency(row.business)} | '
-              'Biz: ${(row.bizPct * 100).toStringAsFixed(0)}%',
-              style: AppTextStyles.label.copyWith(color: AppColors.text),
-            ),
-            if (hasBudget) ...<Widget>[
-              const SizedBox(height: AppConstants.spacingXs),
-              _ProgressBar(budget: row.budget, actual: row.actual),
-            ],
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -682,6 +904,7 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
     MonthlyBudgetData data,
     Map<String, List<MonthlyRow>> groupedRows,
     Map<String, ({double budget, double actual, double business})> subtotals,
+    Map<String, List<Transaction>> transactionsByRowKey,
   ) {
     if (groupedRows.isEmpty) {
       return const SizedBox.shrink();
@@ -708,9 +931,6 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
           _categoryPalette[paletteIndex % _categoryPalette.length];
       paletteIndex++;
     }
-    final Map<String, List<Transaction>> transactionsByRowKey =
-        _groupTransactionsByRowKey(data.transactions);
-
     return ValueListenableBuilder<bool>(
       valueListenable: _isEditingNotifier,
       builder: (BuildContext context, bool isEditing, _) {
@@ -1096,7 +1316,9 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
                                       onPressed:
                                           hasTransactions && !isInlineActive
                                           ? () => _toggleSubcategoryExpanded(
-                                              row.key,
+                                              row: row,
+                                              orgId: orgId,
+                                              data: data,
                                             )
                                           : null,
                                     ),
@@ -1248,11 +1470,20 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
                         _buildTransactionSubRows(
                           context,
                           orgId: orgId,
+                          data: data,
                           transactions: rowTransactions,
+                          suggestedBudget: _lastMonthSpendByRowKey[row.key],
                         ),
                     ],
                   );
                 }),
+              if (!isCollapsed)
+                _buildDesktopAddSubcategoryControl(
+                  context,
+                  orgId: orgId,
+                  data: data,
+                  category: category,
+                ),
               if (!isCollapsed)
                 Container(
                   color: totalRowColor,
@@ -1395,6 +1626,8 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
                     context,
                     orgId: orgId,
                     initialTransaction: transaction,
+                    initialCategory: suggestion?.category,
+                    initialSubcategory: suggestion?.subcategory,
                   );
                   if (!mounted) {
                     return;
@@ -1522,122 +1755,126 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
                           ],
                         )
                       : Row(
-                    children: <Widget>[
-                      _DesktopBodyCell(
-                        _transactionDate.format(transaction.date),
-                        flex: 2,
-                      ),
-                      _DesktopBodyCell(merchant, flex: 4),
-                      Expanded(
-                        flex: 4,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: <Widget>[
-                            Text(
-                              '$category / $subcategory',
-                              style: AppTextStyles.body.copyWith(fontSize: 12),
-                              overflow: TextOverflow.ellipsis,
+                            _DesktopBodyCell(
+                              _transactionDate.format(transaction.date),
+                              flex: 2,
                             ),
-                            if (suggestion != null)
-                              Text(
-                                'Suggested: ${suggestion.category} / ${suggestion.subcategory}',
-                                style: AppTextStyles.label.copyWith(
-                                  fontSize: 11,
-                                  color: AppColors.teal,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                          ],
-                        ),
-                      ),
-                      Expanded(
-                        flex: 2,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: <Widget>[
-                            Text(
-                              _formatCurrency(transaction.amount),
-                              textAlign: TextAlign.right,
-                              style: AppTextStyles.body.copyWith(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
+                            _DesktopBodyCell(merchant, flex: 4),
+                            Expanded(
+                              flex: 4,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: <Widget>[
+                                  Text(
+                                    '$category / $subcategory',
+                                    style: AppTextStyles.body.copyWith(
+                                      fontSize: 12,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  if (suggestion != null)
+                                    Text(
+                                      'Suggested: ${suggestion.category} / ${suggestion.subcategory}',
+                                      style: AppTextStyles.label.copyWith(
+                                        fontSize: 11,
+                                        color: AppColors.teal,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                ],
                               ),
                             ),
-                            if (suggestion != null) ...<Widget>[
-                              const SizedBox(width: AppConstants.spacingXs),
-                              IconButton(
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(
-                                  minWidth: 22,
-                                  minHeight: 22,
-                                ),
-                                tooltip: 'Apply suggestion',
-                                icon: const Icon(
-                                  Icons.check_circle_outline,
-                                  size: 18,
-                                  color: AppColors.green,
-                                ),
-                                onPressed: () async {
-                                  final ScaffoldMessengerState messenger =
-                                      ScaffoldMessenger.of(context);
-                                  try {
-                                    await ref
-                                        .read(
-                                          transactionControllerProvider
-                                              .notifier,
-                                        )
-                                        .save(
-                                          transaction.copyWith(
-                                            category: suggestion.category,
-                                            subcategory: suggestion.subcategory,
-                                          ),
-                                          isEdit: true,
-                                        );
-
-                                    if (!mounted) {
-                                      return;
-                                    }
-
-                                    ref.invalidate(
-                                      monthlyBudgetDataProvider(
-                                        orgId,
-                                        data.year,
-                                        data.month,
+                            Expanded(
+                              flex: 2,
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: <Widget>[
+                                  Text(
+                                    _formatCurrency(transaction.amount),
+                                    textAlign: TextAlign.right,
+                                    style: AppTextStyles.body.copyWith(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  if (suggestion != null) ...<Widget>[
+                                    const SizedBox(
+                                      width: AppConstants.spacingXs,
+                                    ),
+                                    IconButton(
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(
+                                        minWidth: 22,
+                                        minHeight: 22,
                                       ),
-                                    );
+                                      tooltip: 'Apply suggestion',
+                                      icon: const Icon(
+                                        Icons.check_circle_outline,
+                                        size: 18,
+                                        color: AppColors.green,
+                                      ),
+                                      onPressed: () async {
+                                        final ScaffoldMessengerState messenger =
+                                            ScaffoldMessenger.of(context);
+                                        try {
+                                          await ref
+                                              .read(
+                                                transactionControllerProvider
+                                                    .notifier,
+                                              )
+                                              .save(
+                                                transaction.copyWith(
+                                                  category: suggestion.category,
+                                                  subcategory:
+                                                      suggestion.subcategory,
+                                                ),
+                                                isEdit: true,
+                                              );
 
-                                    messenger.showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          'Suggested category applied: '
-                                          '${suggestion.category} / ${suggestion.subcategory}',
-                                        ),
-                                      ),
-                                    );
-                                  } catch (_) {
-                                    if (!mounted) {
-                                      return;
-                                    }
-                                    messenger.showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                          'Unable to apply suggestion.',
-                                        ),
-                                      ),
-                                    );
-                                  }
-                                },
+                                          if (!mounted) {
+                                            return;
+                                          }
+
+                                          ref.invalidate(
+                                            monthlyBudgetDataProvider(
+                                              orgId,
+                                              data.year,
+                                              data.month,
+                                            ),
+                                          );
+
+                                          messenger.showSnackBar(
+                                            SnackBar(
+                                              content: Text(
+                                                'Suggested category applied: '
+                                                '${suggestion.category} / ${suggestion.subcategory}',
+                                              ),
+                                            ),
+                                          );
+                                        } catch (_) {
+                                          if (!mounted) {
+                                            return;
+                                          }
+                                          messenger.showSnackBar(
+                                            const SnackBar(
+                                              content: Text(
+                                                'Unable to apply suggestion.',
+                                              ),
+                                            ),
+                                          );
+                                        }
+                                      },
+                                    ),
+                                  ],
+                                ],
                               ),
-                            ],
+                            ),
                           ],
                         ),
-                      ),
-                    ],
-                  ),
                 ),
               );
             }),
-
           ],
         ],
       ),
@@ -1888,8 +2125,12 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
     }
 
     final double personalExpense = expenseActual - businessActual;
-    final double bizPct = expenseActual > 0 ? businessActual / expenseActual : 0;
-    final double personalPct = expenseActual > 0 ? personalExpense / expenseActual : 0;
+    final double bizPct = expenseActual > 0
+        ? businessActual / expenseActual
+        : 0;
+    final double personalPct = expenseActual > 0
+        ? personalExpense / expenseActual
+        : 0;
 
     return Card(
       child: Padding(
@@ -2160,77 +2401,578 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
   }
 
   Future<void> _editMobileRowBudget(
-    BuildContext context,
-    MonthlyRow row,
-  ) async {
-    final TextEditingController? controller = _controllers[row.key];
-    if (controller == null) {
-      return;
-    }
-
-    final TextEditingController sheetController = TextEditingController(
-      text: controller.text,
+    BuildContext context, {
+    required String orgId,
+    required MonthlyBudgetData data,
+    required MonthlyRow row,
+  }) async {
+    final TextEditingController amountController = TextEditingController(
+      text: _formatBudgetInput(row.budget),
     );
 
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       builder: (BuildContext sheetContext) {
-        return Padding(
-          padding: EdgeInsets.only(
-            left: AppConstants.spacingLg,
-            right: AppConstants.spacingLg,
-            top: AppConstants.spacingLg,
-            bottom:
-                MediaQuery.viewInsetsOf(sheetContext).bottom +
-                AppConstants.spacingLg,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              Text(row.subcategory, style: AppTextStyles.cardTitle),
-              const SizedBox(height: AppConstants.spacingSm),
-              TextField(
-                controller: sheetController,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: const InputDecoration(
-                  labelText: 'Budget',
-                  prefixText: r'$ ',
-                ),
-                autofocus: true,
-              ),
-              const SizedBox(height: AppConstants.spacingMd),
-              Row(
-                children: <Widget>[
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.of(sheetContext).pop(),
-                      child: const Text('Cancel'),
-                    ),
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: EdgeInsets.only(
+              left: AppConstants.spacingLg,
+              right: AppConstants.spacingLg,
+              top: AppConstants.spacingLg,
+              bottom:
+                  MediaQuery.viewInsetsOf(sheetContext).bottom +
+                  AppConstants.spacingLg,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Text(row.subcategory, style: AppTextStyles.cardTitle),
+                const SizedBox(height: AppConstants.spacingSm),
+                TextField(
+                  controller: amountController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
                   ),
-                  const SizedBox(width: AppConstants.spacingSm),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        controller.text = sheetController.text;
-                        _markEdited(row.key);
-                        Navigator.of(sheetContext).pop();
-                      },
-                      child: const Text('Save'),
-                    ),
+                  decoration: const InputDecoration(
+                    labelText: 'Budget for this month',
+                    prefixText: r'$ ',
                   ),
-                ],
-              ),
-            ],
+                  autofocus: true,
+                ),
+                const SizedBox(height: AppConstants.spacingMd),
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(sheetContext).pop(),
+                        child: const Text('Cancel'),
+                      ),
+                    ),
+                    const SizedBox(width: AppConstants.spacingSm),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          final double amount = _parseBudgetValue(
+                            amountController.text,
+                          );
+                          Navigator.of(sheetContext).pop();
+                          await _saveSingleMonthBudgetRow(
+                            context,
+                            orgId: orgId,
+                            data: data,
+                            row: row,
+                            amount: amount,
+                          );
+                        },
+                        child: const Text('Save'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         );
       },
     );
 
-    sheetController.dispose();
+    amountController.dispose();
+  }
+
+  Future<void> _saveSingleMonthBudgetRow(
+    BuildContext context, {
+    required String orgId,
+    required MonthlyBudgetData data,
+    required MonthlyRow row,
+    required double amount,
+  }) async {
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    final DateTime monthStart = DateTime.utc(data.year, data.month, 1);
+    final Map<String, BudgetDefault> existing = <String, BudgetDefault>{
+      for (final MonthlyRow r in data.rows)
+        if (r.hasCustomBudget)
+          r.key: BudgetDefault(
+            id: r.monthOverrideId ?? '',
+            orgId: orgId,
+            category: r.category,
+            subcategory: r.subcategory,
+            monthlyAmount: r.budget,
+            defaultBizPct: r.defaultBizPct,
+            month: monthStart,
+          ),
+    };
+
+    existing[row.key] = BudgetDefault(
+      id: row.monthOverrideId ?? '',
+      orgId: orgId,
+      category: row.category,
+      subcategory: row.subcategory,
+      monthlyAmount: amount,
+      defaultBizPct: row.defaultBizPct,
+      month: monthStart,
+    );
+
+    try {
+      await ref
+          .read(monthlyControllerProvider.notifier)
+          .saveMonthBudgets(
+            orgId,
+            data.year,
+            data.month,
+            existing.values.toList(growable: false),
+          );
+      if (!mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(content: Text('Saved ${row.subcategory} budget')),
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Unable to save this budget right now.')),
+      );
+    }
+  }
+
+  Future<void> _renameMonthScopedSubcategory(
+    BuildContext context, {
+    required String orgId,
+    required MonthlyBudgetData data,
+    required MonthlyRow row,
+  }) async {
+    final String? overrideId = row.monthOverrideId;
+    if (overrideId == null || overrideId.isEmpty) {
+      return;
+    }
+
+    final TextEditingController nameController = TextEditingController(
+      text: row.subcategory,
+    );
+    final TextEditingController amountController = TextEditingController(
+      text: _formatBudgetInput(row.budget),
+    );
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (BuildContext sheetContext) {
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: EdgeInsets.only(
+              left: AppConstants.spacingLg,
+              right: AppConstants.spacingLg,
+              top: AppConstants.spacingLg,
+              bottom:
+                  MediaQuery.viewInsetsOf(sheetContext).bottom +
+                  AppConstants.spacingLg,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Text('Rename Subcategory', style: AppTextStyles.cardTitle),
+                const SizedBox(height: AppConstants.spacingSm),
+                TextField(
+                  controller: nameController,
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(labelText: 'Name'),
+                  autofocus: true,
+                ),
+                const SizedBox(height: AppConstants.spacingSm),
+                TextField(
+                  controller: amountController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: 'Budget',
+                    prefixText: r'$ ',
+                  ),
+                ),
+                const SizedBox(height: AppConstants.spacingMd),
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(sheetContext).pop(),
+                        child: const Text('Cancel'),
+                      ),
+                    ),
+                    const SizedBox(width: AppConstants.spacingSm),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          final String newName = nameController.text.trim();
+                          if (newName.isEmpty) {
+                            return;
+                          }
+                          final double amount = _parseBudgetValue(
+                            amountController.text,
+                          );
+
+                          Navigator.of(sheetContext).pop();
+                          final ScaffoldMessengerState messenger =
+                              ScaffoldMessenger.of(context);
+                          try {
+                            await ref
+                                .read(settingsServiceProvider)
+                                .saveBudgetDefaults(
+                                  <BudgetDefault>[
+                                    BudgetDefault(
+                                      id: '',
+                                      orgId: orgId,
+                                      category: row.category,
+                                      subcategory: newName,
+                                      monthlyAmount: amount,
+                                      defaultBizPct: row.defaultBizPct,
+                                      month: DateTime.utc(
+                                        data.year,
+                                        data.month,
+                                        1,
+                                      ),
+                                    ),
+                                  ],
+                                  deleteIds: <String>[overrideId],
+                                );
+                            if (!mounted) {
+                              return;
+                            }
+                            ref.invalidate(
+                              monthlyBudgetDataProvider(
+                                orgId,
+                                data.year,
+                                data.month,
+                              ),
+                            );
+                            messenger.showSnackBar(
+                              SnackBar(content: Text('Renamed to "$newName"')),
+                            );
+                          } catch (_) {
+                            if (!mounted) {
+                              return;
+                            }
+                            messenger.showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Unable to rename this subcategory right now.',
+                                ),
+                              ),
+                            );
+                          }
+                        },
+                        child: const Text('Save'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    nameController.dispose();
+    amountController.dispose();
+  }
+
+  Future<void> _deleteMonthScopedSubcategory(
+    BuildContext context, {
+    required String orgId,
+    required MonthlyBudgetData data,
+    required MonthlyRow row,
+  }) async {
+    final String? overrideId = row.monthOverrideId;
+    if (overrideId == null || overrideId.isEmpty) {
+      return;
+    }
+
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+
+    final bool? shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Delete subcategory?'),
+          content: Text('Remove "${row.subcategory}" for this month only?'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              style: TextButton.styleFrom(foregroundColor: AppColors.red),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+    if (shouldDelete != true) {
+      return;
+    }
+    try {
+      await ref.read(settingsServiceProvider).deleteBudgetDefault(overrideId);
+      if (!mounted) {
+        return;
+      }
+      ref.invalidate(monthlyBudgetDataProvider(orgId, data.year, data.month));
+      messenger.showSnackBar(
+        SnackBar(content: Text('Deleted "${row.subcategory}"')),
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Unable to delete this subcategory right now.'),
+        ),
+      );
+    }
+  }
+
+  Widget _buildDesktopAddSubcategoryControl(
+    BuildContext context, {
+    required String orgId,
+    required MonthlyBudgetData data,
+    required String category,
+  }) {
+    final bool isEditingCategory = _addingSubcategoryCategory == category;
+    if (!isEditingCategory) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppConstants.spacingMd,
+            vertical: AppConstants.spacingXs,
+          ),
+          child: TextButton.icon(
+            onPressed: () {
+              setState(() {
+                _addingSubcategoryCategory = category;
+                _newSubcategoryNameController.clear();
+                _newSubcategoryBudgetController.clear();
+              });
+            },
+            icon: const Icon(Icons.add, size: 16),
+            label: const Text('Add subcategory'),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(
+        AppConstants.spacingMd,
+        AppConstants.spacingXs,
+        AppConstants.spacingMd,
+        AppConstants.spacingSm,
+      ),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            flex: 3,
+            child: TextField(
+              controller: _newSubcategoryNameController,
+              decoration: const InputDecoration(
+                isDense: true,
+                labelText: 'Subcategory name',
+              ),
+            ),
+          ),
+          const SizedBox(width: AppConstants.spacingSm),
+          Expanded(
+            flex: 2,
+            child: TextField(
+              controller: _newSubcategoryBudgetController,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: const InputDecoration(
+                isDense: true,
+                labelText: 'Budget',
+                prefixText: r'$ ',
+              ),
+            ),
+          ),
+          const SizedBox(width: AppConstants.spacingSm),
+          TextButton(
+            onPressed: () {
+              setState(() {
+                _addingSubcategoryCategory = null;
+                _newSubcategoryNameController.clear();
+                _newSubcategoryBudgetController.clear();
+              });
+            },
+            child: const Text('Cancel'),
+          ),
+          const SizedBox(width: AppConstants.spacingXs),
+          ElevatedButton(
+            onPressed: () => _addMonthScopedSubcategory(
+              context,
+              orgId: orgId,
+              data: data,
+              category: category,
+              subcategory: _newSubcategoryNameController.text.trim(),
+              budget: _parseBudgetValue(_newSubcategoryBudgetController.text),
+            ),
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showAddSubcategorySheet(
+    BuildContext context, {
+    required String orgId,
+    required MonthlyBudgetData data,
+    required String category,
+  }) async {
+    final TextEditingController nameController = TextEditingController();
+    final TextEditingController budgetController = TextEditingController();
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (BuildContext sheetContext) {
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: EdgeInsets.only(
+              left: AppConstants.spacingLg,
+              right: AppConstants.spacingLg,
+              top: AppConstants.spacingLg,
+              bottom:
+                  MediaQuery.viewInsetsOf(sheetContext).bottom +
+                  AppConstants.spacingLg,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Text(
+                  'Add $category subcategory',
+                  style: AppTextStyles.cardTitle,
+                ),
+                const SizedBox(height: AppConstants.spacingSm),
+                TextField(
+                  controller: nameController,
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(labelText: 'Name'),
+                  autofocus: true,
+                ),
+                const SizedBox(height: AppConstants.spacingSm),
+                TextField(
+                  controller: budgetController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: 'Budget for this month',
+                    prefixText: r'$ ',
+                  ),
+                ),
+                const SizedBox(height: AppConstants.spacingMd),
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(sheetContext).pop(),
+                        child: const Text('Cancel'),
+                      ),
+                    ),
+                    const SizedBox(width: AppConstants.spacingSm),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          final String name = nameController.text.trim();
+                          final double budget = _parseBudgetValue(
+                            budgetController.text,
+                          );
+                          Navigator.of(sheetContext).pop();
+                          await _addMonthScopedSubcategory(
+                            context,
+                            orgId: orgId,
+                            data: data,
+                            category: category,
+                            subcategory: name,
+                            budget: budget,
+                          );
+                        },
+                        child: const Text('Add'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    nameController.dispose();
+    budgetController.dispose();
+  }
+
+  Future<void> _addMonthScopedSubcategory(
+    BuildContext context, {
+    required String orgId,
+    required MonthlyBudgetData data,
+    required String category,
+    required String subcategory,
+    required double budget,
+  }) async {
+    final String trimmed = subcategory.trim();
+    if (trimmed.isEmpty) {
+      return;
+    }
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+
+    try {
+      await ref
+          .read(settingsServiceProvider)
+          .saveBudgetDefaults(<BudgetDefault>[
+            BudgetDefault(
+              id: '',
+              orgId: orgId,
+              category: category,
+              subcategory: trimmed,
+              monthlyAmount: budget,
+              defaultBizPct: 0,
+              month: DateTime.utc(data.year, data.month, 1),
+            ),
+          ]);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _addingSubcategoryCategory = null;
+        _newSubcategoryNameController.clear();
+        _newSubcategoryBudgetController.clear();
+      });
+      ref.invalidate(monthlyBudgetDataProvider(orgId, data.year, data.month));
+      messenger.showSnackBar(
+        SnackBar(content: Text('Added "$trimmed" to $category')),
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Unable to add this subcategory.')),
+      );
+    }
   }
 
   void _handleMonthChange(int month) {
@@ -2245,6 +2987,10 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
     _collapsedCategoriesNotifier.value = <String>{};
     _isUncategorizedExpanded = true;
     _isMissingMilesExpanded = true;
+    _addingSubcategoryCategory = null;
+    _newSubcategoryNameController.clear();
+    _newSubcategoryBudgetController.clear();
+    _lastMonthSpendByRowKey.clear();
     _disposeMilesControllers();
     _selectedMonthNotifier.value = month;
   }
@@ -2261,16 +3007,70 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
     _collapsedCategoriesNotifier.value = collapsed;
   }
 
-  void _toggleSubcategoryExpanded(String rowKey) {
+  void _toggleSubcategoryExpanded({
+    required MonthlyRow row,
+    required String orgId,
+    required MonthlyBudgetData data,
+  }) {
     final Set<String> expanded = Set<String>.of(
       _expandedSubcategoryKeysNotifier.value,
     );
-    if (expanded.contains(rowKey)) {
-      expanded.remove(rowKey);
+    if (expanded.contains(row.key)) {
+      expanded.remove(row.key);
     } else {
-      expanded.add(rowKey);
+      final Set<String> sameCategoryKeys = data.rows
+          .where((MonthlyRow monthlyRow) => monthlyRow.category == row.category)
+          .map((MonthlyRow monthlyRow) => monthlyRow.key)
+          .toSet();
+      expanded.removeWhere(sameCategoryKeys.contains);
+      expanded.add(row.key);
+      _ensurePreviousMonthSpend(
+        orgId: orgId,
+        data: data,
+        category: row.category,
+        subcategory: row.subcategory,
+        rowKey: row.key,
+      );
     }
     _expandedSubcategoryKeysNotifier.value = expanded;
+  }
+
+  void _ensurePreviousMonthSpend({
+    required String orgId,
+    required MonthlyBudgetData data,
+    required String category,
+    required String subcategory,
+    required String rowKey,
+  }) {
+    if (_lastMonthSpendByRowKey.containsKey(rowKey)) {
+      return;
+    }
+    _lastMonthSpendByRowKey[rowKey] = null;
+
+    final DateTime previousMonth = DateTime.utc(data.year, data.month - 1, 1);
+    ref
+        .read(
+          monthlyBudgetDataProvider(
+            orgId,
+            previousMonth.year,
+            previousMonth.month,
+          ).future,
+        )
+        .then((MonthlyBudgetData previousData) {
+          final MonthlyRow? previousRow = previousData.rows
+              .where(
+                (MonthlyRow row) =>
+                    row.category == category && row.subcategory == subcategory,
+              )
+              .firstOrNull;
+          if (!mounted) {
+            return;
+          }
+          setState(() {
+            _lastMonthSpendByRowKey[rowKey] = previousRow?.actual ?? 0;
+          });
+        })
+        .ignore();
   }
 
   void _startEditing(List<MonthlyRow> rows) {
@@ -2686,10 +3486,16 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
   }
 
   List<Transaction> _filterUncategorizedTransactions(MonthlyBudgetData data) {
+    const String catchAllKey = 'Other\u0000Uncategorized';
+    final Set<String> knownBudgetKeys = data.rows
+        .map((MonthlyRow row) => row.key)
+        .where((String key) => key != catchAllKey)
+        .toSet();
+
     return data.transactions
         .where(
-          (Transaction t) =>
-              t.category == 'Uncategorized' && t.subcategory == 'Uncategorized',
+          (Transaction transaction) =>
+              !knownBudgetKeys.contains(_transactionKey(transaction)),
         )
         .toList(growable: false);
   }
@@ -2778,7 +3584,9 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
   Widget _buildTransactionSubRows(
     BuildContext context, {
     required String orgId,
+    required MonthlyBudgetData data,
     required List<Transaction> transactions,
+    required double? suggestedBudget,
   }) {
     return Container(
       margin: const EdgeInsets.only(
@@ -2817,11 +3625,19 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
                 : transaction.merchant;
 
             return InkWell(
-              onTap: () => showTransactionForm(
-                context,
-                orgId: orgId,
-                initialTransaction: transaction,
-              ),
+              onTap: () async {
+                await showTransactionForm(
+                  context,
+                  orgId: orgId,
+                  initialTransaction: transaction,
+                );
+                if (!mounted) {
+                  return;
+                }
+                ref.invalidate(
+                  monthlyBudgetDataProvider(orgId, data.year, data.month),
+                );
+              },
               child: Container(
                 color: entry.key.isEven ? AppColors.white : AppColors.lightGray,
                 padding: const EdgeInsets.symmetric(
@@ -2872,6 +3688,26 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
               ),
             );
           }),
+          if (suggestedBudget != null && suggestedBudget > 0)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppConstants.spacingSm,
+                AppConstants.spacingXs,
+                AppConstants.spacingSm,
+                AppConstants.spacingSm,
+              ),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  "Suggested budget: ${_formatCurrency(suggestedBudget)} "
+                  "(based on last month's spending)",
+                  style: AppTextStyles.label.copyWith(
+                    color: AppColors.textMuted,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

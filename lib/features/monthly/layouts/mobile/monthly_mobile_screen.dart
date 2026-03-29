@@ -7,6 +7,6 @@ class MonthlyMobileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MonthlyBudgetView(isMobile: true);
+    return const SafeArea(top: false, child: MonthlyBudgetView(isMobile: true));
   }
 }

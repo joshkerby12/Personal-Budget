@@ -41,81 +41,88 @@ class MileageMobileScreen extends ConsumerWidget {
           data: (List<MileageTrip> trips) {
             final _TripSummary summary = _TripSummary.fromTrips(trips);
 
-            return Padding(
-              padding: const EdgeInsets.all(AppConstants.pagePaddingMobile),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  Row(
-                    children: <Widget>[
-                      Text('Mileage Log', style: AppTextStyles.pageTitle),
-                      const Spacer(),
-                      IconButton(
-                        onPressed: () => _openForm(context, orgId),
-                        icon: const Icon(Icons.add_circle_outline),
-                        tooltip: 'Add Trip',
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppConstants.spacingSm),
-                  _SummaryGrid(summary: summary),
-                  const SizedBox(height: AppConstants.spacingMd),
-                  Expanded(
-                    child: trips.isEmpty
-                        ? const _EmptyState()
-                        : ListView.separated(
-                            itemCount: trips.length,
-                            separatorBuilder:
-                                (BuildContext context, int index) =>
-                                    const SizedBox(
-                                      height: AppConstants.spacingSm,
+            return SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.all(AppConstants.pagePaddingMobile),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    Row(
+                      children: <Widget>[
+                        Text('Mileage Log', style: AppTextStyles.pageTitle),
+                        const Spacer(),
+                        IconButton(
+                          onPressed: () => _openForm(context, orgId),
+                          icon: const Icon(Icons.add_circle_outline),
+                          tooltip: 'Add Trip',
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppConstants.spacingSm),
+                    _SummaryGrid(summary: summary),
+                    const SizedBox(height: AppConstants.spacingMd),
+                    Expanded(
+                      child: trips.isEmpty
+                          ? const _EmptyState()
+                          : ListView.separated(
+                              itemCount: trips.length,
+                              separatorBuilder:
+                                  (BuildContext context, int index) =>
+                                      const SizedBox(
+                                        height: AppConstants.spacingSm,
+                                      ),
+                              itemBuilder: (BuildContext context, int index) {
+                                final MileageTrip trip = trips[index];
+                                final double dedValue = calc.deductibleValue(
+                                  calc.deductibleMiles(
+                                    calc.totalMiles(
+                                      trip.oneWayMiles,
+                                      trip.isRoundTrip,
                                     ),
-                            itemBuilder: (BuildContext context, int index) {
-                              final MileageTrip trip = trips[index];
-                              final double dedValue = calc.deductibleValue(
-                                calc.deductibleMiles(
-                                  calc.totalMiles(
-                                    trip.oneWayMiles,
-                                    trip.isRoundTrip,
+                                    trip.bizPct,
                                   ),
-                                  trip.bizPct,
-                                ),
-                                calc.fallbackIrsRatePerMile,
-                              );
-                              return Card(
-                                child: ListTile(
-                                  onTap: () =>
-                                      _openForm(context, orgId, trip: trip),
-                                  title: Text(
-                                    trip.purpose,
-                                    style: AppTextStyles.cardTitle,
-                                  ),
-                                  subtitle: Text(
-                                    DateFormat('MMM d, yyyy').format(trip.date),
-                                    style: AppTextStyles.body,
-                                  ),
-                                  trailing: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    children: <Widget>[
-                                      Text(
-                                        '${calc.totalMiles(trip.oneWayMiles, trip.isRoundTrip).toStringAsFixed(1)} mi',
-                                        style: AppTextStyles.body,
-                                      ),
-                                      Text(
-                                        '\$${dedValue.toStringAsFixed(2)} deductible',
-                                        style: AppTextStyles.label.copyWith(
-                                          color: AppColors.green,
+                                  calc.fallbackIrsRatePerMile,
+                                );
+                                return Card(
+                                  child: ListTile(
+                                    onTap: () =>
+                                        _openForm(context, orgId, trip: trip),
+                                    title: Text(
+                                      trip.purpose,
+                                      style: AppTextStyles.cardTitle,
+                                    ),
+                                    subtitle: Text(
+                                      DateFormat(
+                                        'MMM d, yyyy',
+                                      ).format(trip.date),
+                                      style: AppTextStyles.body,
+                                    ),
+                                    trailing: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.end,
+                                      children: <Widget>[
+                                        Text(
+                                          '${calc.totalMiles(trip.oneWayMiles, trip.isRoundTrip).toStringAsFixed(1)} mi',
+                                          style: AppTextStyles.body,
                                         ),
-                                      ),
-                                    ],
+                                        Text(
+                                          '\$${dedValue.toStringAsFixed(2)} deductible',
+                                          style: AppTextStyles.label.copyWith(
+                                            color: AppColors.green,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                              );
-                            },
-                          ),
-                  ),
-                ],
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
               ),
             );
           },

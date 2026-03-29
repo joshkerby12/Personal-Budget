@@ -12,8 +12,10 @@ import '../../../../core/widgets/error_view.dart';
 import '../../../categories/models/category.dart';
 import '../../../categories/presentation/providers/categories_provider.dart';
 import '../../helpers/transaction_calculations.dart';
+import '../../models/csv_import_log.dart';
 import '../../models/transaction.dart';
 import '../../presentation/providers/transaction_provider.dart';
+import '../../presentation/widgets/csv_import_flow.dart';
 import '../../presentation/widgets/transaction_form.dart';
 
 enum _BizFilter { all, personalOnly, businessOnly }
@@ -52,6 +54,9 @@ class TransactionsWebScreen extends ConsumerWidget {
 
         final AsyncValue<List<Transaction>> transactionsAsync = ref.watch(
           transactionsProvider(orgId),
+        );
+        final AsyncValue<List<CsvImportLog>> importLogsAsync = ref.watch(
+          csvImportLogsProvider(orgId),
         );
         final AsyncValue<List<Category>> categoriesAsync = ref.watch(
           categoriesProvider,
@@ -109,6 +114,23 @@ class TransactionsWebScreen extends ConsumerWidget {
                     onBizFilterChanged: (_BizFilter value) =>
                         ref.read(_bizFilterProvider.notifier).state = value,
                     onAdd: () => showTransactionForm(context, orgId: orgId),
+                    onImport: () => showCsvImportFlow(
+                      context,
+                      ref,
+                      isMobile: false,
+                      orgId: orgId,
+                      existingTransactions: transactions,
+                    ),
+                  ),
+                  const SizedBox(height: AppConstants.spacingSm),
+                  _ImportHistorySection(
+                    logsAsync: importLogsAsync,
+                    onTapLog: (CsvImportLog log) => showCsvImportDrillDown(
+                      context,
+                      ref,
+                      orgId: orgId,
+                      log: log,
+                    ),
                   ),
                   const SizedBox(height: AppConstants.spacingSm),
                   _SummaryBar(
@@ -248,6 +270,7 @@ class _ToolbarRow extends StatelessWidget {
     required this.onCategoryChanged,
     required this.onBizFilterChanged,
     required this.onAdd,
+    required this.onImport,
   });
 
   final List<String> categories;
@@ -259,6 +282,7 @@ class _ToolbarRow extends StatelessWidget {
   final ValueChanged<String?> onCategoryChanged;
   final ValueChanged<_BizFilter> onBizFilterChanged;
   final VoidCallback onAdd;
+  final VoidCallback onImport;
 
   @override
   Widget build(BuildContext context) {
@@ -349,12 +373,124 @@ class _ToolbarRow extends StatelessWidget {
           ),
         ),
         const SizedBox(width: AppConstants.spacingSm),
+        OutlinedButton.icon(
+          onPressed: onImport,
+          icon: const Icon(Icons.upload_file_outlined),
+          label: const Text('Import CSV'),
+        ),
+        const SizedBox(width: AppConstants.spacingSm),
         ElevatedButton.icon(
           onPressed: onAdd,
           icon: const Icon(Icons.add),
           label: const Text('Add Transaction'),
         ),
       ],
+    );
+  }
+}
+
+class _ImportHistorySection extends StatelessWidget {
+  const _ImportHistorySection({
+    required this.logsAsync,
+    required this.onTapLog,
+  });
+
+  final AsyncValue<List<CsvImportLog>> logsAsync;
+  final ValueChanged<CsvImportLog> onTapLog;
+
+  @override
+  Widget build(BuildContext context) {
+    final DateFormat dateFormatter = DateFormat('MMM d, yyyy · h:mm a');
+
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.all(AppConstants.spacingMd),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Text('Import History', style: AppTextStyles.cardTitle),
+            const SizedBox(height: AppConstants.spacingSm),
+            logsAsync.when(
+              loading: () => const Padding(
+                padding: EdgeInsets.symmetric(vertical: AppConstants.spacingMd),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+              error: (Object error, StackTrace stackTrace) => const Text(
+                'Unable to load import history right now.',
+                style: AppTextStyles.body,
+              ),
+              data: (List<CsvImportLog> logs) {
+                if (logs.isEmpty) {
+                  return Text(
+                    'No CSV imports yet.',
+                    style: AppTextStyles.body.copyWith(
+                      color: AppColors.textMuted,
+                    ),
+                  );
+                }
+
+                return Column(
+                  children: <Widget>[
+                    Container(
+                      color: AppColors.navy,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppConstants.spacingSm,
+                        vertical: AppConstants.spacingXs,
+                      ),
+                      child: const Row(
+                        children: <Widget>[
+                          _HeaderCell('Institution', flex: 2),
+                          _HeaderCell('File', flex: 3),
+                          _HeaderCell('Imported', flex: 2),
+                          _HeaderCell('Count', flex: 1),
+                        ],
+                      ),
+                    ),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 220),
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: logs.length,
+                        itemBuilder: (BuildContext context, int index) {
+                          final CsvImportLog log = logs[index];
+
+                          return InkWell(
+                            onTap: () => onTapLog(log),
+                            child: Container(
+                              color: index.isEven
+                                  ? AppColors.white
+                                  : AppColors.lightGray,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppConstants.spacingSm,
+                                vertical: AppConstants.spacingSm,
+                              ),
+                              child: Row(
+                                children: <Widget>[
+                                  _BodyCell(value: log.institution, flex: 2),
+                                  _BodyCell(value: log.filename, flex: 3),
+                                  _BodyCell(
+                                    value: dateFormatter.format(log.importedAt),
+                                    flex: 2,
+                                  ),
+                                  _BodyCell(
+                                    value: '${log.transactionCount}',
+                                    flex: 1,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

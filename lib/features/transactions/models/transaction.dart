@@ -21,6 +21,9 @@ abstract class Transaction with _$Transaction {
     @JsonKey(name: 'is_split') required bool isSplit,
     @JsonKey(name: 'receipt_id') String? receiptId,
     String? notes,
+    @Default('manual') String source,
+    @JsonKey(name: 'teller_transaction_id') String? tellerTransactionId,
+    @JsonKey(name: 'csv_import_log_id') String? csvImportLogId,
     @JsonKey(name: 'no_miles') @Default(false) bool noMiles,
     @JsonKey(name: 'created_at') required DateTime createdAt,
   }) = _Transaction;

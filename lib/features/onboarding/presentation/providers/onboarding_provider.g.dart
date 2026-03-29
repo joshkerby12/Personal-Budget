@@ -41,7 +41,7 @@ final inviteServiceProvider = Provider<InviteService>.internal(
 // ignore: unused_element
 typedef InviteServiceRef = ProviderRef<InviteService>;
 String _$onboardingControllerHash() =>
-    r'df1e29c1330939912025c800055b98a2184dedb7';
+    r'9f9b64c12f19f37064590060ad2c493de1fbb326';
 
 /// See also [OnboardingController].
 @ProviderFor(OnboardingController)

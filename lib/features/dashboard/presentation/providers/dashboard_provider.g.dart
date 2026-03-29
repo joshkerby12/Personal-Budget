@@ -23,7 +23,7 @@ final dashboardOrgIdProvider = AutoDisposeFutureProvider<String?>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef DashboardOrgIdRef = AutoDisposeFutureProviderRef<String?>;
-String _$dashboardSummaryHash() => r'bc47930c8f2cc1281454e968a8a9a068e0f59504';
+String _$dashboardSummaryHash() => r'28dc103c27fc10f1ed44aeba6d71edd7d07ba4ca';
 
 /// Copied from Dart SDK
 class _SystemHash {
@@ -56,15 +56,15 @@ class DashboardSummaryFamily extends Family<AsyncValue<DashboardSummary>> {
   const DashboardSummaryFamily();
 
   /// See also [dashboardSummary].
-  DashboardSummaryProvider call(String orgId, int year) {
-    return DashboardSummaryProvider(orgId, year);
+  DashboardSummaryProvider call(String orgId, DashboardRange range) {
+    return DashboardSummaryProvider(orgId, range);
   }
 
   @override
   DashboardSummaryProvider getProviderOverride(
     covariant DashboardSummaryProvider provider,
   ) {
-    return call(provider.orgId, provider.year);
+    return call(provider.orgId, provider.range);
   }
 
   static const Iterable<ProviderOrFamily>? _dependencies = null;
@@ -86,9 +86,9 @@ class DashboardSummaryFamily extends Family<AsyncValue<DashboardSummary>> {
 class DashboardSummaryProvider
     extends AutoDisposeFutureProvider<DashboardSummary> {
   /// See also [dashboardSummary].
-  DashboardSummaryProvider(String orgId, int year)
+  DashboardSummaryProvider(String orgId, DashboardRange range)
     : this._internal(
-        (ref) => dashboardSummary(ref as DashboardSummaryRef, orgId, year),
+        (ref) => dashboardSummary(ref as DashboardSummaryRef, orgId, range),
         from: dashboardSummaryProvider,
         name: r'dashboardSummaryProvider',
         debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
@@ -98,7 +98,7 @@ class DashboardSummaryProvider
         allTransitiveDependencies:
             DashboardSummaryFamily._allTransitiveDependencies,
         orgId: orgId,
-        year: year,
+        range: range,
       );
 
   DashboardSummaryProvider._internal(
@@ -109,11 +109,11 @@ class DashboardSummaryProvider
     required super.debugGetCreateSourceHash,
     required super.from,
     required this.orgId,
-    required this.year,
+    required this.range,
   }) : super.internal();
 
   final String orgId;
-  final int year;
+  final DashboardRange range;
 
   @override
   Override overrideWith(
@@ -129,7 +129,7 @@ class DashboardSummaryProvider
         allTransitiveDependencies: null,
         debugGetCreateSourceHash: null,
         orgId: orgId,
-        year: year,
+        range: range,
       ),
     );
   }
@@ -143,14 +143,14 @@ class DashboardSummaryProvider
   bool operator ==(Object other) {
     return other is DashboardSummaryProvider &&
         other.orgId == orgId &&
-        other.year == year;
+        other.range == range;
   }
 
   @override
   int get hashCode {
     var hash = _SystemHash.combine(0, runtimeType.hashCode);
     hash = _SystemHash.combine(hash, orgId.hashCode);
-    hash = _SystemHash.combine(hash, year.hashCode);
+    hash = _SystemHash.combine(hash, range.hashCode);
 
     return _SystemHash.finish(hash);
   }
@@ -162,8 +162,8 @@ mixin DashboardSummaryRef on AutoDisposeFutureProviderRef<DashboardSummary> {
   /// The parameter `orgId` of this provider.
   String get orgId;
 
-  /// The parameter `year` of this provider.
-  int get year;
+  /// The parameter `range` of this provider.
+  DashboardRange get range;
 }
 
 class _DashboardSummaryProviderElement
@@ -174,7 +174,7 @@ class _DashboardSummaryProviderElement
   @override
   String get orgId => (origin as DashboardSummaryProvider).orgId;
   @override
-  int get year => (origin as DashboardSummaryProvider).year;
+  DashboardRange get range => (origin as DashboardSummaryProvider).range;
 }
 
 // ignore_for_file: type=lint

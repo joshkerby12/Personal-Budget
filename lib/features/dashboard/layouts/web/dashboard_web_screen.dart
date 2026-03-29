@@ -13,7 +13,6 @@ import '../../../settings/models/budget_default.dart';
 import '../../../settings/presentation/providers/settings_provider.dart';
 import '../../../transactions/helpers/transaction_calculations.dart';
 import '../../../transactions/models/transaction.dart';
-import '../../../transactions/models/transaction_filter.dart';
 import '../../../transactions/presentation/providers/transaction_provider.dart';
 import '../../presentation/providers/dashboard_provider.dart';
 
@@ -26,21 +25,6 @@ final NumberFormat _compactCurrencyFormat = NumberFormat.compactCurrency(
   symbol: r'$',
 );
 const Color _businessPurple = Color(0xFF7D3C98);
-const List<String> _monthInitials = <String>[
-  'J',
-  'F',
-  'M',
-  'A',
-  'M',
-  'J',
-  'J',
-  'A',
-  'S',
-  'O',
-  'N',
-  'D',
-];
-
 const List<Color> _donutColors = <Color>[
   AppColors.teal,
   AppColors.green,
@@ -51,16 +35,17 @@ const List<Color> _donutColors = <Color>[
   AppColors.lightGray,
 ];
 
-final AutoDisposeStateProvider<int> _selectedYearProvider =
-    StateProvider.autoDispose<int>((Ref ref) => DateTime.now().year);
+final AutoDisposeStateProvider<DashboardRange> _selectedRangeProvider =
+    StateProvider.autoDispose<DashboardRange>(
+      (Ref ref) => DashboardRange.thisMonth,
+    );
 
 class DashboardWebScreen extends ConsumerWidget {
   const DashboardWebScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final int currentYear = DateTime.now().year;
-    final int selectedYear = ref.watch(_selectedYearProvider);
+    final DashboardRange selectedRange = ref.watch(_selectedRangeProvider);
     final AsyncValue<String?> orgIdAsync = ref.watch(dashboardOrgIdProvider);
 
     return orgIdAsync.when(
@@ -76,16 +61,13 @@ class DashboardWebScreen extends ConsumerWidget {
         }
 
         final AsyncValue<DashboardSummary> summaryAsync = ref.watch(
-          dashboardSummaryProvider(orgId, selectedYear),
+          dashboardSummaryProvider(orgId, selectedRange),
         );
         final AsyncValue<List<BudgetDefault>> budgetsAsync = ref.watch(
           budgetDefaultsProvider(orgId),
         );
         final AsyncValue<List<Transaction>> transactionsAsync = ref.watch(
-          transactionsProvider(
-            orgId,
-            filter: TransactionFilter(year: selectedYear),
-          ),
+          transactionsProvider(orgId),
         );
 
         return summaryAsync.when(
@@ -106,14 +88,16 @@ class DashboardWebScreen extends ConsumerWidget {
                   error: (Object error, StackTrace stackTrace) => const Center(
                     child: ErrorView(message: 'Unable to load transactions.'),
                   ),
-                  data: (List<Transaction> yearTransactions) {
+                  data: (List<Transaction> allTransactions) {
+                    final List<Transaction> rangedTransactions = allTransactions
+                        .where(
+                          (Transaction t) =>
+                              !t.date.isBefore(summary.startDate) &&
+                              !t.date.isAfter(summary.endDate),
+                        )
+                        .toList(growable: false);
                     final _CategoryTableData tableData =
-                        _buildCategoryTableData(yearTransactions, budgets);
-                    final List<int> yearOptions = List<int>.generate(
-                      5,
-                      (int index) => currentYear - 2 + index,
-                      growable: false,
-                    );
+                        _buildCategoryTableData(rangedTransactions, budgets);
 
                     return Padding(
                       padding: const EdgeInsets.symmetric(
@@ -126,26 +110,29 @@ class DashboardWebScreen extends ConsumerWidget {
                               Text('Dashboard', style: AppTextStyles.pageTitle),
                               const Spacer(),
                               SizedBox(
-                                width: 130,
-                                child: DropdownButtonFormField<int>(
-                                  key: ValueKey<int>(selectedYear),
-                                  initialValue: selectedYear,
+                                width: 190,
+                                child: DropdownButtonFormField<DashboardRange>(
+                                  key: ValueKey<DashboardRange>(selectedRange),
+                                  initialValue: selectedRange,
                                   decoration: const InputDecoration(
-                                    labelText: 'Year',
+                                    labelText: 'Time Range',
                                   ),
-                                  items: yearOptions
+                                  items: DashboardRange.values
                                       .map(
-                                        (int year) => DropdownMenuItem<int>(
-                                          value: year,
-                                          child: Text(year.toString()),
-                                        ),
+                                        (DashboardRange range) =>
+                                            DropdownMenuItem<DashboardRange>(
+                                              value: range,
+                                              child: Text(
+                                                dashboardRangeLabel(range),
+                                              ),
+                                            ),
                                       )
                                       .toList(growable: false),
-                                  onChanged: (int? value) {
+                                  onChanged: (DashboardRange? value) {
                                     if (value != null) {
                                       ref
                                               .read(
-                                                _selectedYearProvider.notifier,
+                                                _selectedRangeProvider.notifier,
                                               )
                                               .state =
                                           value;
@@ -158,15 +145,20 @@ class DashboardWebScreen extends ConsumerWidget {
                           const SizedBox(height: AppConstants.spacingMd),
                           _SummaryStatCards(summary: summary),
                           const SizedBox(height: AppConstants.spacingMd),
-                          _ChartGrid(summary: summary, year: selectedYear),
+                          _ChartGrid(
+                            summary: summary,
+                            rangeLabel: dashboardRangeLabel(selectedRange),
+                          ),
                           const SizedBox(height: AppConstants.spacingMd),
                           _CategoryTotalsTable(
                             rows: tableData.rows,
                             totalActual: tableData.totalActual,
                             totalBudget: tableData.totalBudget,
                             totalBusiness: tableData.totalBusiness,
-                            selectedYear: selectedYear,
-                            hasTransactions: yearTransactions.isNotEmpty,
+                            selectedRangeLabel: dashboardRangeLabel(
+                              selectedRange,
+                            ),
+                            hasTransactions: rangedTransactions.isNotEmpty,
                           ),
                         ],
                       ),
@@ -264,8 +256,7 @@ class _SummaryStatCards extends StatelessWidget {
                   Expanded(
                     child: _SummaryStatCard(
                       label: 'Income',
-                      total: summary.yearIncome,
-                      month: summary.monthIncome,
+                      total: summary.rangeIncome,
                       accent: AppColors.green,
                       valueColor: AppColors.green,
                     ),
@@ -274,8 +265,7 @@ class _SummaryStatCards extends StatelessWidget {
                   Expanded(
                     child: _SummaryStatCard(
                       label: 'Expenses',
-                      total: summary.yearExpenses,
-                      month: summary.monthExpenses,
+                      total: summary.rangeExpenses,
                       accent: AppColors.teal,
                       valueColor: AppColors.red,
                     ),
@@ -288,10 +278,9 @@ class _SummaryStatCards extends StatelessWidget {
                   Expanded(
                     child: _SummaryStatCard(
                       label: 'Net',
-                      total: summary.yearNet,
-                      month: summary.monthNet,
+                      total: summary.rangeNet,
                       accent: AppColors.amber,
-                      valueColor: summary.yearNet >= 0
+                      valueColor: summary.rangeNet >= 0
                           ? AppColors.green
                           : AppColors.red,
                     ),
@@ -300,8 +289,7 @@ class _SummaryStatCards extends StatelessWidget {
                   Expanded(
                     child: _SummaryStatCard(
                       label: 'Business',
-                      total: summary.yearBusiness,
-                      month: summary.monthBusiness,
+                      total: summary.rangeBusiness,
                       accent: _businessPurple,
                       valueColor: AppColors.textMuted,
                     ),
@@ -317,8 +305,7 @@ class _SummaryStatCards extends StatelessWidget {
             Expanded(
               child: _SummaryStatCard(
                 label: 'Income',
-                total: summary.yearIncome,
-                month: summary.monthIncome,
+                total: summary.rangeIncome,
                 accent: AppColors.green,
                 valueColor: AppColors.green,
               ),
@@ -327,8 +314,7 @@ class _SummaryStatCards extends StatelessWidget {
             Expanded(
               child: _SummaryStatCard(
                 label: 'Expenses',
-                total: summary.yearExpenses,
-                month: summary.monthExpenses,
+                total: summary.rangeExpenses,
                 accent: AppColors.teal,
                 valueColor: AppColors.red,
               ),
@@ -337,10 +323,9 @@ class _SummaryStatCards extends StatelessWidget {
             Expanded(
               child: _SummaryStatCard(
                 label: 'Net',
-                total: summary.yearNet,
-                month: summary.monthNet,
+                total: summary.rangeNet,
                 accent: AppColors.amber,
-                valueColor: summary.yearNet >= 0
+                valueColor: summary.rangeNet >= 0
                     ? AppColors.green
                     : AppColors.red,
               ),
@@ -349,8 +334,7 @@ class _SummaryStatCards extends StatelessWidget {
             Expanded(
               child: _SummaryStatCard(
                 label: 'Business',
-                total: summary.yearBusiness,
-                month: summary.monthBusiness,
+                total: summary.rangeBusiness,
                 accent: _businessPurple,
                 valueColor: AppColors.textMuted,
               ),
@@ -366,14 +350,12 @@ class _SummaryStatCard extends StatelessWidget {
   const _SummaryStatCard({
     required this.label,
     required this.total,
-    required this.month,
     required this.accent,
     required this.valueColor,
   });
 
   final String label;
   final double total;
-  final double month;
   final Color accent;
   final Color valueColor;
 
@@ -397,11 +379,6 @@ class _SummaryStatCard extends StatelessWidget {
                 color: valueColor,
               ),
             ),
-            const SizedBox(height: AppConstants.spacingXs),
-            Text(
-              'This month: ${_currencyFormat.format(month)}',
-              style: AppTextStyles.label.copyWith(fontSize: 12),
-            ),
           ],
         ),
       ),
@@ -412,10 +389,10 @@ class _SummaryStatCard extends StatelessWidget {
 }
 
 class _ChartGrid extends StatelessWidget {
-  const _ChartGrid({required this.summary, required this.year});
+  const _ChartGrid({required this.summary, required this.rangeLabel});
 
   final DashboardSummary summary;
-  final int year;
+  final String rangeLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -428,7 +405,7 @@ class _ChartGrid extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Text(
-                  'Income vs Expenses — $year',
+                  'Income vs Expenses — $rangeLabel',
                   style: AppTextStyles.cardTitle,
                 ),
                 const SizedBox(height: AppConstants.spacingMd),
@@ -488,21 +465,27 @@ class _ChartGrid extends StatelessWidget {
 class _IncomeExpenseBarChart extends StatelessWidget {
   const _IncomeExpenseBarChart({required this.monthlyTotals});
 
-  final List<MonthlyIncomeExpense> monthlyTotals;
+  final List<RangeIncomeExpense> monthlyTotals;
 
   @override
   Widget build(BuildContext context) {
-    final List<MonthlyIncomeExpense> bars = monthlyTotals.length == 12
+    final List<RangeIncomeExpense> bars = monthlyTotals.isNotEmpty
         ? monthlyTotals
-        : List<MonthlyIncomeExpense>.generate(
-            12,
-            (int index) => (month: index + 1, income: 0, expenses: 0),
-            growable: false,
-          );
+        : <RangeIncomeExpense>[
+            (
+              monthStart: DateTime(
+                DateTime.now().year,
+                DateTime.now().month,
+                1,
+              ),
+              income: 0,
+              expenses: 0,
+            ),
+          ];
 
     final double maxValue = bars.fold<double>(
       0,
-      (double current, MonthlyIncomeExpense month) =>
+      (double current, RangeIncomeExpense month) =>
           math.max(current, math.max(month.income, month.expenses)),
     );
     final double maxY = maxValue == 0 ? 100 : (maxValue * 1.2).ceilToDouble();
@@ -546,11 +529,14 @@ class _IncomeExpenseBarChart extends StatelessWidget {
               reservedSize: 20,
               getTitlesWidget: (double value, TitleMeta meta) {
                 final int index = value.toInt();
-                if (index < 0 || index >= _monthInitials.length) {
+                if (index < 0 || index >= bars.length) {
                   return const SizedBox.shrink();
                 }
+                final String monthLabel = DateFormat(
+                  'MMM',
+                ).format(bars[index].monthStart);
                 return Text(
-                  _monthInitials[index],
+                  monthLabel.substring(0, 1),
                   style: AppTextStyles.label.copyWith(fontSize: 11),
                 );
               },
@@ -561,7 +547,7 @@ class _IncomeExpenseBarChart extends StatelessWidget {
             .asMap()
             .entries
             .map(
-              (MapEntry<int, MonthlyIncomeExpense> entry) => BarChartGroupData(
+              (MapEntry<int, RangeIncomeExpense> entry) => BarChartGroupData(
                 x: entry.key,
                 barsSpace: 4,
                 barRods: <BarChartRodData>[
@@ -667,7 +653,7 @@ class _CategoryTotalsTable extends StatelessWidget {
     required this.totalActual,
     required this.totalBudget,
     required this.totalBusiness,
-    required this.selectedYear,
+    required this.selectedRangeLabel,
     required this.hasTransactions,
   });
 
@@ -675,7 +661,7 @@ class _CategoryTotalsTable extends StatelessWidget {
   final double totalActual;
   final double totalBudget;
   final double totalBusiness;
-  final int selectedYear;
+  final String selectedRangeLabel;
   final bool hasTransactions;
 
   @override
@@ -695,7 +681,7 @@ class _CategoryTotalsTable extends StatelessWidget {
                 ),
                 child: Center(
                   child: Text(
-                    'No transactions for $selectedYear',
+                    'No transactions for $selectedRangeLabel',
                     style: AppTextStyles.body.copyWith(
                       color: AppColors.textMuted,
                     ),

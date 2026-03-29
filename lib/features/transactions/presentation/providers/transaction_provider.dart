@@ -2,7 +2,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../../core/network/supabase_client_provider.dart';
+import '../../data/csv_import_service.dart';
 import '../../data/transaction_service.dart';
+import '../../helpers/csv_institution_maps.dart';
+import '../../helpers/csv_parser.dart';
+import '../../models/csv_import_log.dart';
 import '../../models/transaction.dart';
 import '../../models/transaction_filter.dart';
 
@@ -11,6 +15,11 @@ part 'transaction_provider.g.dart';
 @Riverpod(keepAlive: true)
 TransactionService transactionService(Ref ref) {
   return TransactionService(ref.watch(supabaseClientProvider));
+}
+
+@Riverpod(keepAlive: true)
+CsvImportService csvImportService(Ref ref) {
+  return CsvImportService(ref.watch(supabaseClientProvider));
 }
 
 @riverpod
@@ -51,6 +60,11 @@ Future<List<Transaction>> recentCategorizedTransactions(
 }
 
 @riverpod
+Future<List<CsvImportLog>> csvImportLogs(Ref ref, String orgId) async {
+  return ref.read(csvImportServiceProvider).fetchImportLogs(orgId);
+}
+
+@riverpod
 class TransactionController extends _$TransactionController {
   @override
   AsyncValue<void> build() => const AsyncData<void>(null);
@@ -87,6 +101,47 @@ class TransactionController extends _$TransactionController {
 
     if (state.hasError) {
       throw state.error!;
+    }
+  }
+}
+
+@riverpod
+class CsvImportController extends _$CsvImportController {
+  @override
+  AsyncValue<void> build() => const AsyncData<void>(null);
+
+  Future<CsvImportLog> runImport({
+    required CsvInstitution institution,
+    required String filename,
+    required String rawCsv,
+    required String orgId,
+    required String createdBy,
+  }) async {
+    final CsvColumnMap? columnMap = kCsvInstitutionMaps[institution];
+    if (columnMap == null) {
+      throw StateError('No CSV mapping configured for ${institution.label}.');
+    }
+
+    state = const AsyncLoading<void>();
+    try {
+      final List<CsvRow> rows = parseCsv(rawCsv, columnMap);
+      final CsvImportLog log = await ref
+          .read(csvImportServiceProvider)
+          .importCsv(
+            orgId: orgId,
+            createdBy: createdBy,
+            institution: institution,
+            filename: filename,
+            rows: rows,
+          );
+
+      ref.invalidate(transactionsProvider(orgId));
+      ref.invalidate(csvImportLogsProvider(orgId));
+      state = const AsyncData<void>(null);
+      return log;
+    } catch (error, stackTrace) {
+      state = AsyncError<void>(error, stackTrace);
+      rethrow;
     }
   }
 }
