@@ -65,10 +65,13 @@ Future<void> showTransactionForm(
   await showDialog<void>(
     context: context,
     builder: (BuildContext dialogContext) {
-      return AlertDialog(
-        contentPadding: EdgeInsets.zero,
-        content: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 560),
+      return Dialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: 560,
+            maxHeight: MediaQuery.sizeOf(dialogContext).height * 0.85,
+          ),
           child: TransactionForm(
             orgId: orgId,
             initialTransaction: initialTransaction,
