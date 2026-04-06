@@ -56,7 +56,7 @@ Claude scopes and assigns all tasks. Codex implements and marks tasks done. No r
 
 1. **RLS always** — every Supabase table has RLS enabled. Silent failures = RLS. Check policies first.
 2. **Org scoping always** — every query must be scoped to `org_id`. No exceptions. No hardcoded IDs.
-3. **Never touch `main`** — all work on `dev` or feature branches. PRs to `dev` only.
+3. **Branch strategy** — all work on `dev` or feature branches. Merge `dev` → `main` to deploy (Vercel auto-deploys from `main`).
 4. **Never commit `.env`** — secrets stay local. `.env` is in `.gitignore`.
 5. **Riverpod only** — no `setState`, no `ChangeNotifier`. `@riverpod` annotations everywhere.
 6. **`build_runner` after every `@riverpod` or `@freezed` change** — `flutter pub run build_runner build --delete-conflicting-outputs`

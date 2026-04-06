@@ -12,6 +12,11 @@ class AppRoutes {
   static const String mileage = '/mileage';
   static const String business = '/business';
   static const String settings = '/settings';
+  static const String pantryLists = '/pantry/lists';
+  static const String pantryMeals = '/pantry/meals';
+  static const String pantryCookbook = '/pantry/cookbook';
+  static const String pantryDeals = '/pantry/deals';
+  static const String pantryPantry = '/pantry/pantry';
 
   static const String rootName = 'root';
   static const String loginName = 'login';
@@ -24,4 +29,9 @@ class AppRoutes {
   static const String mileageName = 'mileage';
   static const String businessName = 'business';
   static const String settingsName = 'settings';
+  static const String pantryListsName = 'pantryLists';
+  static const String pantryMealsName = 'pantryMeals';
+  static const String pantryCookbookName = 'pantryCookbook';
+  static const String pantryDealsName = 'pantryDeals';
+  static const String pantryPantryName = 'pantryPantry';
 }

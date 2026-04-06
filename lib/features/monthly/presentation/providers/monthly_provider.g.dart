@@ -23,7 +23,7 @@ final monthlyOrgIdProvider = AutoDisposeFutureProvider<String?>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef MonthlyOrgIdRef = AutoDisposeFutureProviderRef<String?>;
-String _$monthlyBudgetDataHash() => r'79cd98105f6f0fef43e7006775cb0cc2464aa0c4';
+String _$monthlyBudgetDataHash() => r'346178761232a0b09c45f467c2cde9e775bcb655';
 
 /// Copied from Dart SDK
 class _SystemHash {
@@ -187,6 +187,175 @@ class _MonthlyBudgetDataProviderElement
   int get year => (origin as MonthlyBudgetDataProvider).year;
   @override
   int get month => (origin as MonthlyBudgetDataProvider).month;
+}
+
+String _$priorMonthsTransactionsHash() =>
+    r'e97c2df3444b8ab2e6b232dbe7670f18c957b3eb';
+
+/// See also [priorMonthsTransactions].
+@ProviderFor(priorMonthsTransactions)
+const priorMonthsTransactionsProvider = PriorMonthsTransactionsFamily();
+
+/// See also [priorMonthsTransactions].
+class PriorMonthsTransactionsFamily
+    extends Family<AsyncValue<List<Transaction>>> {
+  /// See also [priorMonthsTransactions].
+  const PriorMonthsTransactionsFamily();
+
+  /// See also [priorMonthsTransactions].
+  PriorMonthsTransactionsProvider call({
+    required String orgId,
+    required DateTime selectedMonth,
+    required int monthCount,
+  }) {
+    return PriorMonthsTransactionsProvider(
+      orgId: orgId,
+      selectedMonth: selectedMonth,
+      monthCount: monthCount,
+    );
+  }
+
+  @override
+  PriorMonthsTransactionsProvider getProviderOverride(
+    covariant PriorMonthsTransactionsProvider provider,
+  ) {
+    return call(
+      orgId: provider.orgId,
+      selectedMonth: provider.selectedMonth,
+      monthCount: provider.monthCount,
+    );
+  }
+
+  static const Iterable<ProviderOrFamily>? _dependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get dependencies => _dependencies;
+
+  static const Iterable<ProviderOrFamily>? _allTransitiveDependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get allTransitiveDependencies =>
+      _allTransitiveDependencies;
+
+  @override
+  String? get name => r'priorMonthsTransactionsProvider';
+}
+
+/// See also [priorMonthsTransactions].
+class PriorMonthsTransactionsProvider
+    extends AutoDisposeFutureProvider<List<Transaction>> {
+  /// See also [priorMonthsTransactions].
+  PriorMonthsTransactionsProvider({
+    required String orgId,
+    required DateTime selectedMonth,
+    required int monthCount,
+  }) : this._internal(
+         (ref) => priorMonthsTransactions(
+           ref as PriorMonthsTransactionsRef,
+           orgId: orgId,
+           selectedMonth: selectedMonth,
+           monthCount: monthCount,
+         ),
+         from: priorMonthsTransactionsProvider,
+         name: r'priorMonthsTransactionsProvider',
+         debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+             ? null
+             : _$priorMonthsTransactionsHash,
+         dependencies: PriorMonthsTransactionsFamily._dependencies,
+         allTransitiveDependencies:
+             PriorMonthsTransactionsFamily._allTransitiveDependencies,
+         orgId: orgId,
+         selectedMonth: selectedMonth,
+         monthCount: monthCount,
+       );
+
+  PriorMonthsTransactionsProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.orgId,
+    required this.selectedMonth,
+    required this.monthCount,
+  }) : super.internal();
+
+  final String orgId;
+  final DateTime selectedMonth;
+  final int monthCount;
+
+  @override
+  Override overrideWith(
+    FutureOr<List<Transaction>> Function(PriorMonthsTransactionsRef provider)
+    create,
+  ) {
+    return ProviderOverride(
+      origin: this,
+      override: PriorMonthsTransactionsProvider._internal(
+        (ref) => create(ref as PriorMonthsTransactionsRef),
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        orgId: orgId,
+        selectedMonth: selectedMonth,
+        monthCount: monthCount,
+      ),
+    );
+  }
+
+  @override
+  AutoDisposeFutureProviderElement<List<Transaction>> createElement() {
+    return _PriorMonthsTransactionsProviderElement(this);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is PriorMonthsTransactionsProvider &&
+        other.orgId == orgId &&
+        other.selectedMonth == selectedMonth &&
+        other.monthCount == monthCount;
+  }
+
+  @override
+  int get hashCode {
+    var hash = _SystemHash.combine(0, runtimeType.hashCode);
+    hash = _SystemHash.combine(hash, orgId.hashCode);
+    hash = _SystemHash.combine(hash, selectedMonth.hashCode);
+    hash = _SystemHash.combine(hash, monthCount.hashCode);
+
+    return _SystemHash.finish(hash);
+  }
+}
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+mixin PriorMonthsTransactionsRef
+    on AutoDisposeFutureProviderRef<List<Transaction>> {
+  /// The parameter `orgId` of this provider.
+  String get orgId;
+
+  /// The parameter `selectedMonth` of this provider.
+  DateTime get selectedMonth;
+
+  /// The parameter `monthCount` of this provider.
+  int get monthCount;
+}
+
+class _PriorMonthsTransactionsProviderElement
+    extends AutoDisposeFutureProviderElement<List<Transaction>>
+    with PriorMonthsTransactionsRef {
+  _PriorMonthsTransactionsProviderElement(super.provider);
+
+  @override
+  String get orgId => (origin as PriorMonthsTransactionsProvider).orgId;
+  @override
+  DateTime get selectedMonth =>
+      (origin as PriorMonthsTransactionsProvider).selectedMonth;
+  @override
+  int get monthCount => (origin as PriorMonthsTransactionsProvider).monthCount;
 }
 
 String _$monthlyControllerHash() => r'e95b2fee79ac90b0c805a8be101e2d77bd461fbd';

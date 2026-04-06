@@ -18,6 +18,7 @@ import '../../../mileage/models/mileage_trip.dart';
 import '../../../mileage/presentation/providers/mileage_provider.dart';
 import '../../helpers/transaction_calculations.dart';
 import '../../models/transaction.dart';
+import '../../models/transaction_split.dart';
 import '../../../teller/models/teller_enrollment.dart';
 import '../../../teller/presentation/providers/teller_provider.dart';
 import '../providers/transaction_provider.dart';
@@ -129,6 +130,8 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
   late bool _allowBlankCategorySelectionForUncategorized;
   bool _hasAppliedSuggestion = false;
   bool _hasManualCategoryChoice = false;
+  final List<_SplitDraftRow> _splitRows = <_SplitDraftRow>[];
+  bool _isLoadingInitialSplits = false;
 
   @override
   void initState() {
@@ -176,6 +179,11 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
       text: ((transaction?.bizPct ?? 0) * 100).toStringAsFixed(0),
     );
     _notesController = TextEditingController(text: transaction?.notes ?? '');
+
+    if (_isEdit && (transaction?.isSplit ?? false)) {
+      _isLoadingInitialSplits = true;
+      _loadInitialSplitRows(transaction!.id);
+    }
   }
 
   @override
@@ -194,6 +202,7 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
     _attachedReceiptFilenameNotifier.dispose();
     _milesController.dispose();
     _roundTripNotifier.dispose();
+    _disposeSplitRows();
     super.dispose();
   }
 
@@ -251,9 +260,8 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
               onClose: widget.onClose,
             ),
             data: (List<BudgetDefault> defaults) {
-              final _CategoryData categoryData = _CategoryData.fromBudgetDefaults(
-                defaults,
-              );
+              final _CategoryData categoryData =
+                  _CategoryData.fromBudgetDefaults(defaults);
               final ({String category, String subcategory})? suggestion =
                   _buildSuggestion(
                     widget.initialTransaction,
@@ -329,202 +337,260 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
                       ),
                     ),
                     const SizedBox(height: AppConstants.spacingSm),
-                    ValueListenableBuilder<String?>(
-                      valueListenable: _selectedCategoryNotifier,
-                      builder: (BuildContext context, String? category, _) {
-                        return DropdownButtonFormField<String>(
-                          key: ValueKey<String?>(category),
-                          initialValue: category,
-                          decoration: const InputDecoration(
-                            labelText: 'Category',
+                    ValueListenableBuilder<bool>(
+                      valueListenable: _isSplitNotifier,
+                      builder: (BuildContext context, bool isSplit, _) {
+                        return SwitchListTile.adaptive(
+                          value: isSplit,
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('Split this transaction'),
+                          subtitle: const Text(
+                            'Allocate this amount across multiple categories.',
                           ),
-                          hint: const Text('Select category'),
-                          items: categoryData.parentCategories
-                              .map(
-                                (String parent) => DropdownMenuItem<String>(
-                                  value: parent,
-                                  child: Text(parent),
-                                ),
-                              )
-                              .toList(growable: false),
-                          validator: (String? value) =>
-                              value == null ? 'Category is required.' : null,
-                          onChanged: (String? value) {
-                            _selectedCategoryNotifier.value = value;
-                            _allowBlankCategorySelectionForUncategorized =
-                                false;
-                            _hasManualCategoryChoice = true;
-                            _selectedSubcategoryNotifier.value = null;
-
-                            final List<String> subcategories =
-                                categoryData.subcategoriesByParent[value] ??
-                                const <String>[];
-                            if (subcategories.isEmpty) {
-                              _maybeApplyDefaultBizPct(defaults);
-                              return;
-                            }
-                            final bool isMobile =
-                                MediaQuery.sizeOf(context).width <
-                                AppConstants.mobileBreakpoint;
-                            if (isMobile) {
-                              _autoOpenSubcategoryPicker(
-                                context,
-                                subcategories,
-                                defaults,
-                              );
-                            }
+                          onChanged: (bool value) {
+                            _handleSplitToggle(value, defaults);
                           },
                         );
-                      },
-                    ),
-                    const SizedBox(height: AppConstants.spacingSm),
-                    ValueListenableBuilder<String?>(
-                      valueListenable: _selectedCategoryNotifier,
-                      builder: (BuildContext context, String? category, _) {
-                        final List<String> subcategories =
-                            categoryData.subcategoriesByParent[category] ??
-                            const <String>[];
-                        return ValueListenableBuilder<String?>(
-                          valueListenable: _selectedSubcategoryNotifier,
-                          builder:
-                              (
-                                BuildContext context,
-                                String? subcategory,
-                                Widget? child,
-                              ) {
-                                return DropdownButtonFormField<String>(
-                                  key: ValueKey<String?>(subcategory),
-                                  initialValue: subcategory,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Subcategory',
-                                  ),
-                                  hint: const Text('Select subcategory'),
-                                  items: subcategories
-                                      .map(
-                                        (String value) =>
-                                            DropdownMenuItem<String>(
-                                              value: value,
-                                              child: Text(value),
-                                            ),
-                                      )
-                                      .toList(growable: false),
-                                  validator: (String? value) => value == null
-                                      ? 'Subcategory is required.'
-                                      : null,
-                                  onChanged: (String? value) {
-                                    _hasManualCategoryChoice = true;
-                                    _selectedSubcategoryNotifier.value = value;
-                                    _maybeApplyDefaultBizPct(defaults);
-                                  },
-                                );
-                              },
-                        );
-                      },
-                    ),
-                    const SizedBox(height: AppConstants.spacingSm),
-                    TextFormField(
-                      controller: _bizPctController,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      decoration: const InputDecoration(
-                        labelText: 'Business %',
-                        suffixText: '%',
-                      ),
-                      onChanged: (_) => _hasManualBizPctOverride = true,
-                      validator: (String? value) {
-                        final double? bizPct = _parseNumber(value);
-                        if (bizPct == null || bizPct < 0 || bizPct > 100) {
-                          return 'Business % must be between 0 and 100.';
-                        }
-                        return null;
                       },
                     ),
                     const SizedBox(height: AppConstants.spacingSm),
                     ValueListenableBuilder<bool>(
                       valueListenable: _isSplitNotifier,
                       builder: (BuildContext context, bool isSplit, _) {
-                        return DropdownButtonFormField<bool>(
-                          key: ValueKey<bool>(isSplit),
-                          initialValue: isSplit,
-                          decoration: const InputDecoration(
-                            labelText: 'Split Transaction?',
-                          ),
-                          items: const <DropdownMenuItem<bool>>[
-                            DropdownMenuItem<bool>(
-                              value: false,
-                              child: Text('No'),
+                        if (_isLoadingInitialSplits && isSplit) {
+                          return const Padding(
+                            padding: EdgeInsets.symmetric(
+                              vertical: AppConstants.spacingSm,
                             ),
-                            DropdownMenuItem<bool>(
-                              value: true,
-                              child: Text('Yes'),
-                            ),
-                          ],
-                          onChanged: (bool? value) {
-                            if (value != null) {
-                              _isSplitNotifier.value = value;
-                            }
-                          },
-                        );
-                      },
-                    ),
-                    const SizedBox(height: AppConstants.spacingSm),
-                    ValueListenableBuilder<String?>(
-                      valueListenable: _selectedCategoryNotifier,
-                      builder: (BuildContext context, String? category, _) {
-                        final bool showMiles =
-                            category == 'Business' || category == 'Healthcare';
-                        if (!showMiles) {
-                          return const SizedBox.shrink();
+                            child: LinearProgressIndicator(),
+                          );
                         }
+
+                        if (isSplit) {
+                          return _buildSplitEditor(
+                            categoryData: categoryData,
+                            defaults: defaults,
+                          );
+                        }
+
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: <Widget>[
+                            ValueListenableBuilder<String?>(
+                              valueListenable: _selectedCategoryNotifier,
+                              builder: (BuildContext context, String? category, _) {
+                                return DropdownButtonFormField<String>(
+                                  key: ValueKey<String?>(category),
+                                  initialValue: category,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Category',
+                                  ),
+                                  hint: const Text('Select category'),
+                                  items: categoryData.parentCategories
+                                      .map(
+                                        (String parent) =>
+                                            DropdownMenuItem<String>(
+                                              value: parent,
+                                              child: Text(parent),
+                                            ),
+                                      )
+                                      .toList(growable: false),
+                                  validator: (String? value) => value == null
+                                      ? 'Category is required.'
+                                      : null,
+                                  onChanged: (String? value) {
+                                    _selectedCategoryNotifier.value = value;
+                                    _allowBlankCategorySelectionForUncategorized =
+                                        false;
+                                    _hasManualCategoryChoice = true;
+                                    _selectedSubcategoryNotifier.value = null;
+
+                                    final List<String> subcategories =
+                                        categoryData
+                                            .subcategoriesByParent[value] ??
+                                        const <String>[];
+                                    if (subcategories.isEmpty) {
+                                      _maybeApplyDefaultBizPct(defaults);
+                                      return;
+                                    }
+                                    final bool isMobile =
+                                        MediaQuery.sizeOf(context).width <
+                                        AppConstants.mobileBreakpoint;
+                                    if (isMobile) {
+                                      _autoOpenSubcategoryPicker(
+                                        context,
+                                        subcategories,
+                                        defaults,
+                                      );
+                                    }
+                                  },
+                                );
+                              },
+                            ),
+                            const SizedBox(height: AppConstants.spacingSm),
+                            ValueListenableBuilder<String?>(
+                              valueListenable: _selectedCategoryNotifier,
+                              builder:
+                                  (BuildContext context, String? category, _) {
+                                    final List<String> subcategories =
+                                        categoryData
+                                            .subcategoriesByParent[category] ??
+                                        const <String>[];
+                                    return ValueListenableBuilder<String?>(
+                                      valueListenable:
+                                          _selectedSubcategoryNotifier,
+                                      builder:
+                                          (
+                                            BuildContext context,
+                                            String? subcategory,
+                                            Widget? child,
+                                          ) {
+                                            return DropdownButtonFormField<
+                                              String
+                                            >(
+                                              key: ValueKey<String?>(
+                                                subcategory,
+                                              ),
+                                              initialValue: subcategory,
+                                              decoration: const InputDecoration(
+                                                labelText: 'Subcategory',
+                                              ),
+                                              hint: const Text(
+                                                'Select subcategory',
+                                              ),
+                                              items: subcategories
+                                                  .map(
+                                                    (String value) =>
+                                                        DropdownMenuItem<
+                                                          String
+                                                        >(
+                                                          value: value,
+                                                          child: Text(value),
+                                                        ),
+                                                  )
+                                                  .toList(growable: false),
+                                              validator: (String? value) =>
+                                                  value == null
+                                                  ? 'Subcategory is required.'
+                                                  : null,
+                                              onChanged: (String? value) {
+                                                _hasManualCategoryChoice = true;
+                                                _selectedSubcategoryNotifier
+                                                        .value =
+                                                    value;
+                                                _maybeApplyDefaultBizPct(
+                                                  defaults,
+                                                );
+                                              },
+                                            );
+                                          },
+                                    );
+                                  },
+                            ),
+                            const SizedBox(height: AppConstants.spacingSm),
                             TextFormField(
-                              controller: _milesController,
+                              controller: _bizPctController,
                               keyboardType:
                                   const TextInputType.numberWithOptions(
                                     decimal: true,
                                   ),
                               decoration: const InputDecoration(
-                                labelText: 'Miles driven (optional)',
-                                suffixText: 'mi',
+                                labelText: 'Business %',
+                                suffixText: '%',
                               ),
+                              onChanged: (_) => _hasManualBizPctOverride = true,
+                              validator: (String? value) {
+                                final double? bizPct = _parseNumber(value);
+                                if (bizPct == null ||
+                                    bizPct < 0 ||
+                                    bizPct > 100) {
+                                  return 'Business % must be between 0 and 100.';
+                                }
+                                return null;
+                              },
                             ),
                             const SizedBox(height: AppConstants.spacingSm),
-                            ValueListenableBuilder<bool>(
-                              valueListenable: _roundTripNotifier,
-                              builder:
-                                  (BuildContext context, bool isRoundTrip, _) {
-                                    return DropdownButtonFormField<bool>(
-                                      key: ValueKey<bool>(isRoundTrip),
-                                      initialValue: isRoundTrip,
+                            ValueListenableBuilder<String?>(
+                              valueListenable: _selectedCategoryNotifier,
+                              builder: (BuildContext context, String? category, _) {
+                                final bool showMiles =
+                                    category == 'Business' ||
+                                    category == 'Healthcare';
+                                if (!showMiles) {
+                                  return const SizedBox.shrink();
+                                }
+                                return Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: <Widget>[
+                                    TextFormField(
+                                      controller: _milesController,
+                                      keyboardType:
+                                          const TextInputType.numberWithOptions(
+                                            decimal: true,
+                                          ),
                                       decoration: const InputDecoration(
-                                        labelText: 'Round trip?',
+                                        labelText: 'Miles driven (optional)',
+                                        suffixText: 'mi',
                                       ),
-                                      items: const <DropdownMenuItem<bool>>[
-                                        DropdownMenuItem<bool>(
-                                          value: false,
-                                          child: Text('No'),
-                                        ),
-                                        DropdownMenuItem<bool>(
-                                          value: true,
-                                          child: Text('Yes'),
-                                        ),
-                                      ],
-                                      onChanged: (bool? value) {
-                                        if (value != null) {
-                                          _roundTripNotifier.value = value;
-                                        }
-                                      },
-                                    );
-                                  },
+                                    ),
+                                    const SizedBox(
+                                      height: AppConstants.spacingSm,
+                                    ),
+                                    ValueListenableBuilder<bool>(
+                                      valueListenable: _roundTripNotifier,
+                                      builder:
+                                          (
+                                            BuildContext context,
+                                            bool isRoundTrip,
+                                            _,
+                                          ) {
+                                            return DropdownButtonFormField<
+                                              bool
+                                            >(
+                                              key: ValueKey<bool>(isRoundTrip),
+                                              initialValue: isRoundTrip,
+                                              decoration: const InputDecoration(
+                                                labelText: 'Round trip?',
+                                              ),
+                                              items:
+                                                  const <
+                                                    DropdownMenuItem<bool>
+                                                  >[
+                                                    DropdownMenuItem<bool>(
+                                                      value: false,
+                                                      child: Text('No'),
+                                                    ),
+                                                    DropdownMenuItem<bool>(
+                                                      value: true,
+                                                      child: Text('Yes'),
+                                                    ),
+                                                  ],
+                                              onChanged: (bool? value) {
+                                                if (value != null) {
+                                                  _roundTripNotifier.value =
+                                                      value;
+                                                }
+                                              },
+                                            );
+                                          },
+                                    ),
+                                    const SizedBox(
+                                      height: AppConstants.spacingSm,
+                                    ),
+                                  ],
+                                );
+                              },
                             ),
-                            const SizedBox(height: AppConstants.spacingSm),
+                            _SplitPreview(
+                              amountController: _amountController,
+                              bizPctController: _bizPctController,
+                            ),
                           ],
                         );
                       },
                     ),
+                    const SizedBox(height: AppConstants.spacingSm),
                     TextFormField(
                       controller: _notesController,
                       minLines: 2,
@@ -532,11 +598,6 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
                       decoration: const InputDecoration(
                         labelText: 'Notes (optional)',
                       ),
-                    ),
-                    const SizedBox(height: AppConstants.spacingSm),
-                    _SplitPreview(
-                      amountController: _amountController,
-                      bizPctController: _bizPctController,
                     ),
                     const SizedBox(height: AppConstants.spacingSm),
                     ValueListenableBuilder<String?>(
@@ -641,6 +702,301 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
         ),
       ),
     );
+  }
+
+  Future<void> _loadInitialSplitRows(String transactionId) async {
+    try {
+      final List<TransactionSplit> splits = await ref.read(
+        transactionSplitsProvider(transactionId).future,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _disposeSplitRows();
+        if (splits.isEmpty) {
+          _splitRows
+            ..add(_SplitDraftRow())
+            ..add(_SplitDraftRow());
+        } else {
+          _splitRows.addAll(
+            splits.map(
+              (TransactionSplit split) => _SplitDraftRow(
+                id: split.id,
+                category: split.category,
+                subcategory: split.subcategory,
+                amount: split.amount.toStringAsFixed(2),
+                bizPct: (split.bizPct * 100).toStringAsFixed(0),
+                hasManualBizPctOverride: true,
+              ),
+            ),
+          );
+        }
+        _isLoadingInitialSplits = false;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _disposeSplitRows();
+        _splitRows
+          ..add(_SplitDraftRow())
+          ..add(_SplitDraftRow());
+        _isLoadingInitialSplits = false;
+      });
+    }
+  }
+
+  void _handleSplitToggle(bool enabled, List<BudgetDefault> defaults) {
+    _isSplitNotifier.value = enabled;
+    if (!enabled) {
+      setState(_disposeSplitRows);
+      return;
+    }
+
+    if (_splitRows.isNotEmpty) {
+      return;
+    }
+
+    setState(() {
+      _splitRows
+        ..add(_SplitDraftRow())
+        ..add(_SplitDraftRow());
+    });
+    for (final _SplitDraftRow row in _splitRows) {
+      _maybeApplyDefaultBizPctToSplitRow(row, defaults);
+    }
+  }
+
+  Widget _buildSplitEditor({
+    required _CategoryData categoryData,
+    required List<BudgetDefault> defaults,
+  }) {
+    final double total = _parseAmount(_amountController.text) ?? 0;
+    final double allocated = _splitRows.fold<double>(
+      0,
+      (double sum, _SplitDraftRow row) =>
+          sum + (_parseAmount(row.amountController.text) ?? 0),
+    );
+    final double remaining = total - allocated;
+    final bool isBalanced = remaining.abs() <= 0.01;
+    final Color remainingColor = isBalanced
+        ? AppColors.green
+        : (remaining < 0 ? AppColors.red : AppColors.amber);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppConstants.spacingSm),
+      decoration: BoxDecoration(
+        color: AppColors.lightGray,
+        borderRadius: BorderRadius.circular(AppConstants.spacingSm),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          ..._splitRows.asMap().entries.map(
+            (MapEntry<int, _SplitDraftRow> entry) => Padding(
+              padding: const EdgeInsets.only(bottom: AppConstants.spacingSm),
+              child: _buildSplitRowCard(
+                index: entry.key,
+                row: entry.value,
+                categoryData: categoryData,
+                defaults: defaults,
+              ),
+            ),
+          ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () {
+                setState(() {
+                  _splitRows.add(_SplitDraftRow());
+                });
+              },
+              icon: const Icon(Icons.add, size: 16),
+              label: const Text('Add Split'),
+            ),
+          ),
+          Text(
+            'Remaining to allocate: ${_formatCurrency(remaining)}',
+            style: AppTextStyles.body.copyWith(
+              fontWeight: FontWeight.w700,
+              color: remainingColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSplitRowCard({
+    required int index,
+    required _SplitDraftRow row,
+    required _CategoryData categoryData,
+    required List<BudgetDefault> defaults,
+  }) {
+    final List<String> subcategories =
+        categoryData.subcategoriesByParent[row.category] ?? const <String>[];
+    if (row.subcategory != null && !subcategories.contains(row.subcategory)) {
+      row.subcategory = null;
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(AppConstants.spacingSm),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(AppConstants.spacingXs),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Text(
+                'Split ${index + 1}',
+                style: AppTextStyles.label.copyWith(fontSize: 12),
+              ),
+              const Spacer(),
+              IconButton(
+                tooltip: 'Remove split',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                onPressed: _splitRows.length <= 1
+                    ? null
+                    : () {
+                        setState(() {
+                          final _SplitDraftRow removed = _splitRows.removeAt(
+                            index,
+                          );
+                          removed.dispose();
+                        });
+                      },
+                icon: const Icon(Icons.close, size: 16),
+              ),
+            ],
+          ),
+          DropdownButtonFormField<String>(
+            key: ValueKey<String>('split-category-${row.id}-${row.category}'),
+            initialValue: row.category,
+            decoration: const InputDecoration(labelText: 'Category'),
+            hint: const Text('Select category'),
+            items: categoryData.parentCategories
+                .map(
+                  (String category) => DropdownMenuItem<String>(
+                    value: category,
+                    child: Text(category),
+                  ),
+                )
+                .toList(growable: false),
+            onChanged: (String? value) {
+              setState(() {
+                row.category = value;
+                row.subcategory = null;
+                row.hasManualBizPctOverride = false;
+                _maybeApplyDefaultBizPctToSplitRow(row, defaults);
+              });
+            },
+          ),
+          const SizedBox(height: AppConstants.spacingSm),
+          DropdownButtonFormField<String>(
+            key: ValueKey<String>(
+              'split-subcategory-${row.id}-${row.subcategory}',
+            ),
+            initialValue: row.subcategory,
+            decoration: const InputDecoration(labelText: 'Subcategory'),
+            hint: const Text('Select subcategory'),
+            items: subcategories
+                .map(
+                  (String subcategory) => DropdownMenuItem<String>(
+                    value: subcategory,
+                    child: Text(subcategory),
+                  ),
+                )
+                .toList(growable: false),
+            onChanged: (String? value) {
+              setState(() {
+                row.subcategory = value;
+                _maybeApplyDefaultBizPctToSplitRow(row, defaults);
+              });
+            },
+          ),
+          const SizedBox(height: AppConstants.spacingSm),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: TextFormField(
+                  controller: row.amountController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: 'Amount',
+                    prefixText: r'$ ',
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+              ),
+              const SizedBox(width: AppConstants.spacingSm),
+              Expanded(
+                child: TextFormField(
+                  controller: row.bizPctController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: 'Biz %',
+                    suffixText: '%',
+                  ),
+                  onChanged: (_) {
+                    row.hasManualBizPctOverride = true;
+                  },
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _maybeApplyDefaultBizPctToSplitRow(
+    _SplitDraftRow row,
+    List<BudgetDefault> defaults,
+  ) {
+    if (row.hasManualBizPctOverride) {
+      return;
+    }
+
+    final String? category = row.category;
+    final String? subcategory = row.subcategory;
+    if (category == null || subcategory == null) {
+      return;
+    }
+
+    BudgetDefault? match;
+    for (final BudgetDefault budget in defaults) {
+      if (budget.category == category && budget.subcategory == subcategory) {
+        match = budget;
+        break;
+      }
+    }
+
+    if (match == null) {
+      row.bizPctController.text = '0';
+      return;
+    }
+
+    row.bizPctController.text = (match.defaultBizPct * 100).toStringAsFixed(0);
+  }
+
+  void _disposeSplitRows() {
+    for (final _SplitDraftRow row in _splitRows) {
+      row.dispose();
+    }
+    _splitRows.clear();
   }
 
   void _syncSelection(
@@ -906,15 +1262,7 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
       return;
     }
 
-    final String? category = _selectedCategoryNotifier.value;
-    final String? subcategory = _selectedSubcategoryNotifier.value;
-    if (category == null || subcategory == null) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Category and subcategory are required.')),
-      );
-      return;
-    }
-
+    final bool isSplit = _isSplitNotifier.value;
     final double? amount = _parseAmount(_amountController.text);
     if (amount == null || amount <= 0) {
       messenger.showSnackBar(
@@ -925,11 +1273,10 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
       return;
     }
 
-    final double bizPctValue =
-        ((_parseNumber(_bizPctController.text) ?? 0) / 100).clamp(0, 1);
     final String? attachedReceiptId = _attachedReceiptIdNotifier.value;
 
     final Transaction? initialTransaction = widget.initialTransaction;
+    final String transactionId = initialTransaction?.id ?? _uuid.v4();
     final String? userId = ref
         .read(supabaseClientProvider)
         .auth
@@ -942,8 +1289,103 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
       return;
     }
 
+    String? category = _selectedCategoryNotifier.value;
+    String? subcategory = _selectedSubcategoryNotifier.value;
+    double bizPctValue = ((_parseNumber(_bizPctController.text) ?? 0) / 100)
+        .clamp(0, 1);
+    List<TransactionSplit>? splits;
+
+    if (isSplit) {
+      if (_splitRows.length < 2) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Add at least 2 split rows.')),
+        );
+        return;
+      }
+
+      final List<TransactionSplit> parsedSplits = <TransactionSplit>[];
+      double allocatedTotal = 0;
+      double weightedBizNumerator = 0;
+
+      for (int i = 0; i < _splitRows.length; i++) {
+        final _SplitDraftRow row = _splitRows[i];
+        final String? splitCategory = row.category?.trim();
+        final String? splitSubcategory = row.subcategory?.trim();
+        if (splitCategory == null ||
+            splitCategory.isEmpty ||
+            splitSubcategory == null ||
+            splitSubcategory.isEmpty) {
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text('Split ${i + 1} needs category and subcategory.'),
+            ),
+          );
+          return;
+        }
+
+        final double? splitAmount = _parseAmount(row.amountController.text);
+        if (splitAmount == null || splitAmount <= 0) {
+          messenger.showSnackBar(
+            SnackBar(content: Text('Split ${i + 1} needs an amount > 0.')),
+          );
+          return;
+        }
+
+        final double? splitBizPctRaw = _parseNumber(row.bizPctController.text);
+        if (splitBizPctRaw == null ||
+            splitBizPctRaw < 0 ||
+            splitBizPctRaw > 100) {
+          messenger.showSnackBar(
+            SnackBar(content: Text('Split ${i + 1} biz% must be 0 to 100.')),
+          );
+          return;
+        }
+
+        final double splitBizPct = (splitBizPctRaw / 100).clamp(0, 1);
+        allocatedTotal += splitAmount;
+        weightedBizNumerator += splitAmount * splitBizPct;
+        parsedSplits.add(
+          TransactionSplit(
+            id: row.id,
+            transactionId: transactionId,
+            orgId: widget.orgId,
+            category: splitCategory,
+            subcategory: splitSubcategory,
+            amount: splitAmount,
+            bizPct: splitBizPct,
+            createdAt: DateTime.now(),
+          ),
+        );
+      }
+
+      if ((allocatedTotal - amount).abs() > 0.01) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              'Split amounts must total ${_formatCurrency(amount)} exactly.',
+            ),
+          ),
+        );
+        return;
+      }
+
+      splits = parsedSplits;
+      category = parsedSplits.first.category;
+      subcategory = parsedSplits.first.subcategory;
+      bizPctValue = (weightedBizNumerator / amount).clamp(0, 1);
+    } else {
+      if (category == null || subcategory == null) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('Category and subcategory are required.'),
+          ),
+        );
+        return;
+      }
+    }
+
     final Transaction transaction = Transaction(
-      id: initialTransaction?.id ?? _uuid.v4(),
+      id: transactionId,
       orgId: widget.orgId,
       createdBy: initialTransaction?.createdBy ?? userId,
       date: _selectedDateNotifier.value,
@@ -953,7 +1395,7 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
       category: category,
       subcategory: subcategory,
       bizPct: bizPctValue,
-      isSplit: _isSplitNotifier.value,
+      isSplit: isSplit,
       receiptId: attachedReceiptId ?? initialTransaction?.receiptId,
       notes: _emptyToNull(_notesController.text),
       source: initialTransaction?.source ?? 'manual',
@@ -964,7 +1406,7 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
     try {
       await ref
           .read(transactionControllerProvider.notifier)
-          .save(transaction, isEdit: _isEdit);
+          .save(transaction, isEdit: _isEdit, splits: splits);
 
       if (attachedReceiptId != null) {
         await ref
@@ -973,7 +1415,7 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
       }
 
       final double? miles = double.tryParse(_milesController.text.trim());
-      final String? cat = _selectedCategoryNotifier.value;
+      final String? cat = isSplit ? null : _selectedCategoryNotifier.value;
       if (miles != null &&
           miles > 0 &&
           (cat == 'Business' || cat == 'Healthcare')) {
@@ -1140,6 +1582,10 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
 
   String _formatDate(DateTime date) => DateFormat('MMM d, yyyy').format(date);
 
+  String _formatCurrency(double amount) {
+    return NumberFormat.currency(symbol: r'$').format(amount);
+  }
+
   double? _parseAmount(String? raw) {
     if (raw == null) {
       return null;
@@ -1159,6 +1605,31 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
   String? _emptyToNull(String raw) {
     final String trimmed = raw.trim();
     return trimmed.isEmpty ? null : trimmed;
+  }
+}
+
+class _SplitDraftRow {
+  _SplitDraftRow({
+    String? id,
+    this.category,
+    this.subcategory,
+    String amount = '',
+    String bizPct = '0',
+    this.hasManualBizPctOverride = false,
+  }) : id = id ?? _uuid.v4(),
+       amountController = TextEditingController(text: amount),
+       bizPctController = TextEditingController(text: bizPct);
+
+  final String id;
+  String? category;
+  String? subcategory;
+  final TextEditingController amountController;
+  final TextEditingController bizPctController;
+  bool hasManualBizPctOverride;
+
+  void dispose() {
+    amountController.dispose();
+    bizPctController.dispose();
   }
 }
 
@@ -1251,44 +1722,10 @@ class _CategoryData {
         .where((BudgetDefault d) => d.month == null)
         .toList();
 
-    final Map<String, List<BudgetDefault>> grouped = <String, List<BudgetDefault>>{};
+    final Map<String, List<BudgetDefault>> grouped =
+        <String, List<BudgetDefault>>{};
     for (final BudgetDefault d in globals) {
       grouped.putIfAbsent(d.category, () => <BudgetDefault>[]).add(d);
-    }
-
-    final List<String> parents = grouped.keys.toList()
-      ..sort(compareCategoryOrder);
-
-    final Map<String, List<String>> subcategoriesByParent = <String, List<String>>{};
-    for (final String parent in parents) {
-      final List<BudgetDefault> rows = grouped[parent]!
-        ..sort((BudgetDefault a, BudgetDefault b) => a.subcategory.compareTo(b.subcategory));
-      subcategoriesByParent[parent] = rows
-          .map((BudgetDefault d) => d.subcategory)
-          .toList(growable: false);
-    }
-
-    subcategoriesByParent.putIfAbsent(
-      'Transfers',
-      () => <String>['Credit Card Payment', 'Account Transfer'],
-    );
-    if (!parents.contains('Transfers')) {
-      parents.add('Transfers');
-    }
-
-    return _CategoryData(
-      parentCategories: parents,
-      subcategoriesByParent: subcategoriesByParent,
-    );
-  }
-
-  factory _CategoryData.fromCategories(List<Category> categories) {
-    final Map<String, List<Category>> grouped = <String, List<Category>>{};
-
-    for (final Category category in categories) {
-      grouped
-          .putIfAbsent(category.parentCategory, () => <Category>[])
-          .add(category);
     }
 
     final List<String> parents = grouped.keys.toList()
@@ -1297,16 +1734,13 @@ class _CategoryData {
     final Map<String, List<String>> subcategoriesByParent =
         <String, List<String>>{};
     for (final String parent in parents) {
-      final List<Category> rows = List<Category>.from(grouped[parent]!)
-        ..sort((Category a, Category b) {
-          final int orderCmp = a.sortOrder.compareTo(b.sortOrder);
-          if (orderCmp != 0) {
-            return orderCmp;
-          }
-          return a.subcategory.compareTo(b.subcategory);
-        });
+      final List<BudgetDefault> rows = grouped[parent]!
+        ..sort(
+          (BudgetDefault a, BudgetDefault b) =>
+              a.subcategory.compareTo(b.subcategory),
+        );
       subcategoriesByParent[parent] = rows
-          .map((Category c) => c.subcategory)
+          .map((BudgetDefault d) => d.subcategory)
           .toList(growable: false);
     }
 

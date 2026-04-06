@@ -8,6 +8,7 @@ import '../../../settings/models/budget_default.dart';
 import '../../../settings/presentation/providers/settings_provider.dart';
 import '../../../transactions/helpers/transaction_calculations.dart';
 import '../../../transactions/models/transaction.dart';
+import '../../../transactions/models/transaction_split.dart';
 
 part 'monthly_provider.g.dart';
 
@@ -90,6 +91,29 @@ Future<MonthlyBudgetData> monthlyBudgetData(
       .map(BudgetDefault.fromJson)
       .toList(growable: false);
 
+  final List<String> splitTransactionIds = transactions
+      .where((Transaction transaction) => transaction.isSplit)
+      .map((Transaction transaction) => transaction.id)
+      .toList(growable: false);
+  final Map<String, List<TransactionSplit>> splitsByTransactionId =
+      <String, List<TransactionSplit>>{};
+  if (splitTransactionIds.isNotEmpty) {
+    final List<dynamic> splitRows = await client
+        .from('transaction_splits')
+        .select()
+        .eq('org_id', orgId)
+        .inFilter('transaction_id', splitTransactionIds);
+
+    for (final TransactionSplit split
+        in splitRows.cast<Map<String, dynamic>>().map(
+          TransactionSplit.fromJson,
+        )) {
+      splitsByTransactionId
+          .putIfAbsent(split.transactionId, () => <TransactionSplit>[])
+          .add(split);
+    }
+  }
+
   final Map<String, BudgetDefault> globalByKey = <String, BudgetDefault>{
     for (final BudgetDefault row in globalDefaults)
       _budgetKey(row.category, row.subcategory): row,
@@ -102,15 +126,29 @@ Future<MonthlyBudgetData> monthlyBudgetData(
   final Map<String, _ActualAccumulator> actualByKey =
       <String, _ActualAccumulator>{};
   for (final Transaction transaction in transactions) {
-    final String key = _budgetKey(
-      transaction.category,
-      transaction.subcategory,
-    );
-    final _ActualAccumulator accumulator = actualByKey.putIfAbsent(
-      key,
-      _ActualAccumulator.new,
-    );
-    accumulator.add(transaction.amount, transaction.bizPct);
+    if (!transaction.isSplit) {
+      final String key = _budgetKey(
+        transaction.category,
+        transaction.subcategory,
+      );
+      final _ActualAccumulator accumulator = actualByKey.putIfAbsent(
+        key,
+        _ActualAccumulator.new,
+      );
+      accumulator.add(transaction.amount, transaction.bizPct);
+      continue;
+    }
+
+    final List<TransactionSplit> splits =
+        splitsByTransactionId[transaction.id] ?? const <TransactionSplit>[];
+    for (final TransactionSplit split in splits) {
+      final String key = _budgetKey(split.category, split.subcategory);
+      final _ActualAccumulator accumulator = actualByKey.putIfAbsent(
+        key,
+        _ActualAccumulator.new,
+      );
+      accumulator.add(split.amount, split.bizPct);
+    }
   }
 
   // Use globalDefaults (budgets WHERE month IS NULL) as the source of truth
@@ -131,13 +169,29 @@ Future<MonthlyBudgetData> monthlyBudgetData(
   // Reroute transactions whose category/subcategory isn't in globalDefaults
   // into the catch-all bucket
   for (final Transaction t in transactions) {
-    final String key = _budgetKey(t.category, t.subcategory);
-    if (!seenKeys.contains(key)) {
-      final _ActualAccumulator acc = actualByKey.putIfAbsent(
-        catchAllKey,
-        _ActualAccumulator.new,
-      );
-      acc.add(t.amount, t.bizPct);
+    if (!t.isSplit) {
+      final String key = _budgetKey(t.category, t.subcategory);
+      if (!seenKeys.contains(key)) {
+        final _ActualAccumulator acc = actualByKey.putIfAbsent(
+          catchAllKey,
+          _ActualAccumulator.new,
+        );
+        acc.add(t.amount, t.bizPct);
+      }
+      continue;
+    }
+
+    final List<TransactionSplit> splits =
+        splitsByTransactionId[t.id] ?? const <TransactionSplit>[];
+    for (final TransactionSplit split in splits) {
+      final String key = _budgetKey(split.category, split.subcategory);
+      if (!seenKeys.contains(key)) {
+        final _ActualAccumulator acc = actualByKey.putIfAbsent(
+          catchAllKey,
+          _ActualAccumulator.new,
+        );
+        acc.add(split.amount, split.bizPct);
+      }
     }
   }
   // Include all month override keys so month-scoped subcategories appear in
@@ -212,13 +266,14 @@ Future<MonthlyBudgetData> monthlyBudgetData(
     );
   }
 
-  // Calculate month income from transactions to detect over-budget
+  // Calculate month income from computed rows so split transactions are
+  // accounted for in the correct categories.
   double monthIncome = 0;
   double totalBudgeted = 0;
-  for (final Transaction t in transactions) {
-    if (isIncome(t.category)) monthIncome += t.amount;
-  }
   for (final MonthlyRow row in rows) {
+    if (isIncome(row.category)) {
+      monthIncome += row.actual;
+    }
     if (!isTransfer(row.category)) totalBudgeted += row.budget;
   }
 
@@ -228,10 +283,49 @@ Future<MonthlyBudgetData> monthlyBudgetData(
     hasCustomBudgets: monthOverrides.isNotEmpty,
     rows: rows,
     transactions: transactions,
+    transactionSplitsByTransactionId: <String, List<TransactionSplit>>{
+      for (final MapEntry<String, List<TransactionSplit>> entry
+          in splitsByTransactionId.entries)
+        entry.key: List<TransactionSplit>.unmodifiable(entry.value),
+    },
     categorySubtotals: subtotals,
     monthIncome: monthIncome,
     totalBudgeted: totalBudgeted,
   );
+}
+
+@riverpod
+Future<List<Transaction>> priorMonthsTransactions(
+  PriorMonthsTransactionsRef ref, {
+  required String orgId,
+  required DateTime selectedMonth,
+  required int monthCount,
+}) async {
+  final client = ref.watch(supabaseClientProvider);
+  final DateTime selectedMonthStart = DateTime.utc(
+    selectedMonth.year,
+    selectedMonth.month,
+    1,
+  );
+  final DateTime rangeStart = DateTime.utc(
+    selectedMonthStart.year,
+    selectedMonthStart.month - monthCount,
+    1,
+  );
+
+  final List<dynamic> rows = await client
+      .from('transactions')
+      .select()
+      .eq('org_id', orgId)
+      .gte('date', _formatDate(rangeStart))
+      .lt('date', _formatDate(selectedMonthStart))
+      .order('date', ascending: true)
+      .order('created_at', ascending: true);
+
+  return rows
+      .cast<Map<String, dynamic>>()
+      .map(Transaction.fromJson)
+      .toList(growable: false);
 }
 
 @riverpod
@@ -300,6 +394,7 @@ class MonthlyBudgetData {
     required this.hasCustomBudgets,
     required this.rows,
     required this.transactions,
+    required this.transactionSplitsByTransactionId,
     required this.categorySubtotals,
     required this.monthIncome,
     required this.totalBudgeted,
@@ -310,6 +405,7 @@ class MonthlyBudgetData {
   final bool hasCustomBudgets;
   final List<MonthlyRow> rows;
   final List<Transaction> transactions;
+  final Map<String, List<TransactionSplit>> transactionSplitsByTransactionId;
   final Map<String, ({double budget, double actual, double business})>
   categorySubtotals;
 

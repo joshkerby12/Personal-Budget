@@ -248,10 +248,57 @@ class _SummaryStatCards extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
-        if (constraints.maxWidth < 980) {
-          return Column(
-            children: <Widget>[
-              Row(
+        final Widget actualCards = constraints.maxWidth < 980
+            ? Column(
+                children: <Widget>[
+                  Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: _SummaryStatCard(
+                          label: 'Income',
+                          total: summary.rangeIncome,
+                          accent: AppColors.green,
+                          valueColor: AppColors.green,
+                        ),
+                      ),
+                      const SizedBox(width: AppConstants.spacingSm),
+                      Expanded(
+                        child: _SummaryStatCard(
+                          label: 'Expenses',
+                          total: summary.rangeExpenses,
+                          accent: AppColors.teal,
+                          valueColor: AppColors.red,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppConstants.spacingSm),
+                  Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: _SummaryStatCard(
+                          label: 'Net',
+                          total: summary.rangeNet,
+                          accent: AppColors.amber,
+                          valueColor: summary.rangeNet >= 0
+                              ? AppColors.green
+                              : AppColors.red,
+                        ),
+                      ),
+                      const SizedBox(width: AppConstants.spacingSm),
+                      Expanded(
+                        child: _SummaryStatCard(
+                          label: 'Business',
+                          total: summary.rangeBusiness,
+                          accent: _businessPurple,
+                          valueColor: AppColors.textMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              )
+            : Row(
                 children: <Widget>[
                   Expanded(
                     child: _SummaryStatCard(
@@ -270,11 +317,7 @@ class _SummaryStatCards extends StatelessWidget {
                       valueColor: AppColors.red,
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: AppConstants.spacingSm),
-              Row(
-                children: <Widget>[
+                  const SizedBox(width: AppConstants.spacingSm),
                   Expanded(
                     child: _SummaryStatCard(
                       label: 'Net',
@@ -295,51 +338,65 @@ class _SummaryStatCards extends StatelessWidget {
                     ),
                   ),
                 ],
-              ),
-            ],
-          );
-        }
+              );
 
-        return Row(
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            Expanded(
-              child: _SummaryStatCard(
-                label: 'Income',
-                total: summary.rangeIncome,
-                accent: AppColors.green,
-                valueColor: AppColors.green,
-              ),
-            ),
-            const SizedBox(width: AppConstants.spacingSm),
-            Expanded(
-              child: _SummaryStatCard(
-                label: 'Expenses',
-                total: summary.rangeExpenses,
-                accent: AppColors.teal,
-                valueColor: AppColors.red,
-              ),
-            ),
-            const SizedBox(width: AppConstants.spacingSm),
-            Expanded(
-              child: _SummaryStatCard(
-                label: 'Net',
-                total: summary.rangeNet,
-                accent: AppColors.amber,
-                valueColor: summary.rangeNet >= 0
-                    ? AppColors.green
-                    : AppColors.red,
-              ),
-            ),
-            const SizedBox(width: AppConstants.spacingSm),
-            Expanded(
-              child: _SummaryStatCard(
-                label: 'Business',
-                total: summary.rangeBusiness,
-                accent: _businessPurple,
-                valueColor: AppColors.textMuted,
-              ),
-            ),
+            actualCards,
+            const SizedBox(height: AppConstants.spacingSm),
+            _BudgetedSummaryCards(summary: summary),
           ],
+        );
+      },
+    );
+  }
+}
+
+class _BudgetedSummaryCards extends StatelessWidget {
+  const _BudgetedSummaryCards({required this.summary});
+
+  final DashboardSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final int columns = constraints.maxWidth < 980 ? 2 : 3;
+        final double spacing = AppConstants.spacingSm;
+        final double totalSpacing = spacing * (columns - 1);
+        final double tileWidth =
+            (constraints.maxWidth - totalSpacing) / columns;
+
+        final List<Widget> cards = <Widget>[
+          _SummaryStatCard(
+            label: 'Budgeted Income',
+            total: summary.budgetedIncome,
+            accent: AppColors.green,
+            valueColor: AppColors.green,
+          ),
+          _SummaryStatCard(
+            label: 'Budgeted Expenses',
+            total: summary.budgetedExpenses,
+            accent: AppColors.teal,
+            valueColor: AppColors.teal,
+          ),
+          _SummaryStatCard(
+            label: 'Projected Net',
+            total: summary.projectedNet,
+            accent: summary.projectedNet >= 0 ? AppColors.green : AppColors.red,
+            valueColor: summary.projectedNet >= 0
+                ? AppColors.green
+                : AppColors.red,
+          ),
+        ];
+
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: cards
+              .map((Widget card) => SizedBox(width: tileWidth, child: card))
+              .toList(growable: false),
         );
       },
     );

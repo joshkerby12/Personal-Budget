@@ -209,9 +209,9 @@ function mapTransactionRow(
   const tellerTransactionId = stringOrNull(tellerTransaction.id);
   const date = normalizeDate(tellerTransaction.date);
   const amountRaw = Number(tellerTransaction.amount ?? 0);
-  const amount = Number.isFinite(amountRaw) ? Math.abs(amountRaw) : NaN;
+  const amount = Number.isFinite(amountRaw) ? amountRaw : NaN;
 
-  if (!tellerTransactionId || !date || !Number.isFinite(amount) || amount <= 0) {
+  if (!tellerTransactionId || !date || !Number.isFinite(amount) || amount === 0) {
     return null;
   }
 
@@ -224,7 +224,7 @@ function mapTransactionRow(
   const accountType =
     stringOrNull(account.type)?.toLowerCase()
       ?? enrollment.account_type.toLowerCase();
-  const isIncome = transactionType === 'credit' && accountType === 'depository';
+  const isIncome = transactionType === 'credit' && accountType === 'depository' && amount > 0;
 
   return {
     org_id: enrollment.org_id,

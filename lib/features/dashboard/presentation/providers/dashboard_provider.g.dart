@@ -23,7 +23,7 @@ final dashboardOrgIdProvider = AutoDisposeFutureProvider<String?>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef DashboardOrgIdRef = AutoDisposeFutureProviderRef<String?>;
-String _$dashboardSummaryHash() => r'28dc103c27fc10f1ed44aeba6d71edd7d07ba4ca';
+String _$dashboardSummaryHash() => r'a3846ad2268ab61fb11bb8861131934f8551718a';
 
 /// Copied from Dart SDK
 class _SystemHash {
