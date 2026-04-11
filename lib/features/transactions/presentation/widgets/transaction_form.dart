@@ -749,24 +749,23 @@ class _TransactionFormState extends ConsumerState<TransactionForm> {
   }
 
   void _handleSplitToggle(bool enabled, List<BudgetDefault> defaults) {
-    _isSplitNotifier.value = enabled;
     if (!enabled) {
       setState(_disposeSplitRows);
-      return;
-    }
-
-    if (_splitRows.isNotEmpty) {
+      _isSplitNotifier.value = false;
       return;
     }
 
     setState(() {
-      _splitRows
-        ..add(_SplitDraftRow())
-        ..add(_SplitDraftRow());
+      if (_splitRows.isEmpty) {
+        _splitRows
+          ..add(_SplitDraftRow())
+          ..add(_SplitDraftRow());
+      }
     });
     for (final _SplitDraftRow row in _splitRows) {
       _maybeApplyDefaultBizPctToSplitRow(row, defaults);
     }
+    _isSplitNotifier.value = true;
   }
 
   Widget _buildSplitEditor({
