@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/providers/app_mode_provider.dart';
 import '../../../core/providers/current_org_provider.dart';
 import '../../../core/routing/app_routes.dart';
 import '../../../core/theme/app_colors.dart';
@@ -18,9 +19,28 @@ class MobileShell extends ConsumerStatefulWidget {
 }
 
 class _MobileShellState extends ConsumerState<MobileShell> {
+  static const int _pantryBranchStartIndex = 6;
+
   @override
   Widget build(BuildContext context) {
     final AsyncValue<String?> orgIdAsync = ref.watch(currentOrgIdProvider);
+    final AppMode selectedMode = ref.watch(appModeProvider);
+    final AppMode routeMode =
+        widget.navigationShell.currentIndex >= _pantryBranchStartIndex
+        ? AppMode.pantry
+        : AppMode.budget;
+    final AppMode appMode = routeMode;
+
+    if (selectedMode != routeMode) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(appModeProvider.notifier).state = routeMode;
+      });
+    }
+
+    final bool showFab = _shouldShowFab(
+      appMode,
+      widget.navigationShell.currentIndex,
+    );
 
     return Scaffold(
       backgroundColor: AppColors.lightGray,
@@ -35,6 +55,24 @@ class _MobileShellState extends ConsumerState<MobileShell> {
             color: AppColors.white,
           ),
         ),
+        actions: <Widget>[
+          IconButton(
+            onPressed: () => _showMoreSheet(context),
+            icon: const Icon(Icons.menu_rounded),
+            tooltip: 'More',
+            color: AppColors.white,
+          ),
+          if (appMode == AppMode.pantry)
+            IconButton(
+              onPressed: () {
+                ref.read(appModeProvider.notifier).state = AppMode.budget;
+                context.go(AppRoutes.dashboard);
+              },
+              icon: const Icon(Icons.account_balance_wallet_outlined),
+              tooltip: 'Back to Budget',
+              color: AppColors.white,
+            ),
+        ],
       ),
       body: widget.navigationShell,
       bottomNavigationBar: SizedBox(
@@ -48,98 +86,211 @@ class _MobileShellState extends ConsumerState<MobileShell> {
                 type: BottomNavigationBarType.fixed,
                 currentIndex: _bottomNavIndexForBranch(
                   widget.navigationShell.currentIndex,
+                  appMode,
                 ),
                 selectedItemColor: AppColors.teal,
                 unselectedItemColor: AppColors.textMuted,
                 backgroundColor: AppColors.white,
-                onTap: (int index) => _onBottomNavTapped(context, index),
-                items: const <BottomNavigationBarItem>[
-                  BottomNavigationBarItem(
-                    icon: Icon(Icons.home_outlined),
-                    activeIcon: Icon(Icons.home),
-                    label: 'Home',
-                  ),
-                  BottomNavigationBarItem(
-                    icon: Icon(Icons.calendar_month_outlined),
-                    activeIcon: Icon(Icons.calendar_month),
-                    label: 'Monthly',
-                  ),
-                  BottomNavigationBarItem(
-                    icon: Icon(
-                      Icons.circle,
-                      color: Colors.transparent,
-                      size: 1,
-                    ),
-                    activeIcon: Icon(
-                      Icons.circle,
-                      color: Colors.transparent,
-                      size: 1,
-                    ),
-                    label: '',
-                  ),
-                  BottomNavigationBarItem(
-                    icon: Icon(Icons.receipt_long_outlined),
-                    activeIcon: Icon(Icons.receipt_long),
-                    label: 'Transactions',
-                  ),
-                  BottomNavigationBarItem(
-                    icon: Icon(Icons.more_horiz),
-                    activeIcon: Icon(Icons.more_horiz),
-                    label: 'More',
-                  ),
-                ],
+                onTap: (int index) =>
+                    _onBottomNavTapped(context, index, appMode),
+                items: _bottomNavItems(appMode),
               ),
             ),
-            Positioned(
-              top: -28,
-              child: FloatingActionButton(
-                backgroundColor: AppColors.teal,
-                foregroundColor: AppColors.white,
-                shape: const CircleBorder(),
-                onPressed: () => _openAddTransactionForm(context, orgIdAsync),
-                child: const Icon(Icons.add, size: 28),
+            if (showFab)
+              Positioned(
+                top: -28,
+                child: FloatingActionButton(
+                  backgroundColor: AppColors.teal,
+                  foregroundColor: AppColors.white,
+                  shape: const CircleBorder(),
+                  onPressed: () => _onFabPressed(context, orgIdAsync, appMode),
+                  child: const Icon(Icons.add, size: 28),
+                ),
               ),
-            ),
           ],
         ),
       ),
     );
   }
 
-  int _bottomNavIndexForBranch(int branchIndex) {
+  bool _shouldShowFab(AppMode appMode, int branchIndex) {
+    if (appMode == AppMode.budget) {
+      return true;
+    }
+    return branchIndex == 6 || branchIndex == 7;
+  }
+
+  List<BottomNavigationBarItem> _bottomNavItems(AppMode appMode) {
+    if (appMode == AppMode.budget) {
+      return <BottomNavigationBarItem>[
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.home_outlined),
+          activeIcon: Icon(Icons.home),
+          label: 'Home',
+        ),
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.calendar_month_outlined),
+          activeIcon: Icon(Icons.calendar_month),
+          label: 'Monthly',
+        ),
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.receipt_long_outlined),
+          activeIcon: Icon(Icons.receipt_long),
+          label: 'Transactions',
+        ),
+        BottomNavigationBarItem(
+          icon: _modeToggleIcon(AppMode.budget, false),
+          activeIcon: _modeToggleIcon(AppMode.budget, true),
+          label: 'Pantry',
+        ),
+      ];
+    }
+
+    return <BottomNavigationBarItem>[
+      const BottomNavigationBarItem(
+        icon: Icon(Icons.list_alt_outlined),
+        activeIcon: Icon(Icons.list_alt),
+        label: 'Lists',
+      ),
+      const BottomNavigationBarItem(
+        icon: Icon(Icons.calendar_today_outlined),
+        activeIcon: Icon(Icons.calendar_today),
+        label: 'Meals',
+      ),
+      const BottomNavigationBarItem(
+        icon: Icon(Icons.menu_book_outlined),
+        activeIcon: Icon(Icons.menu_book),
+        label: 'Cookbook',
+      ),
+      const BottomNavigationBarItem(
+        icon: Icon(Icons.kitchen_outlined),
+        activeIcon: Icon(Icons.kitchen),
+        label: 'Pantry',
+      ),
+    ];
+  }
+
+  int _bottomNavIndexForBranch(int branchIndex, AppMode appMode) {
+    if (appMode == AppMode.pantry) {
+      switch (branchIndex) {
+        case 6:
+          return 0;
+        case 7:
+          return 1;
+        case 8:
+          return 2;
+        case 10:
+          return 3;
+        default:
+          return 0;
+      }
+    }
+
     switch (branchIndex) {
       case 0:
         return 0;
       case 1:
         return 1;
       case 2:
-        return 3;
-      case 3:
-      case 4:
-      case 5:
-        return 4;
+        return 2;
       default:
         return 0;
     }
   }
 
-  void _onBottomNavTapped(BuildContext context, int index) {
+  void _onBottomNavTapped(BuildContext context, int index, AppMode appMode) {
+    if (appMode == AppMode.budget) {
+      switch (index) {
+        case 0:
+          context.go(AppRoutes.dashboard);
+          return;
+        case 1:
+          context.go(AppRoutes.monthly);
+          return;
+        case 2:
+          context.go(AppRoutes.transactions);
+          return;
+        case 3:
+          ref.read(appModeProvider.notifier).state = AppMode.pantry;
+          context.go(AppRoutes.pantryLists);
+          return;
+      }
+      return;
+    }
+
     switch (index) {
       case 0:
-        context.go(AppRoutes.dashboard);
+        context.go(AppRoutes.pantryLists);
         return;
       case 1:
-        context.go(AppRoutes.monthly);
+        context.go(AppRoutes.pantryMeals);
         return;
       case 2:
+        context.go(AppRoutes.pantryCookbook);
         return;
       case 3:
-        context.go(AppRoutes.transactions);
-        return;
-      case 4:
-        _showMoreSheet(context);
+        context.go(AppRoutes.pantryPantry);
         return;
     }
+  }
+
+  Widget _modeToggleIcon(AppMode appMode, bool isActive) {
+    final bool toPantry = appMode == AppMode.budget;
+    final Color background = toPantry
+        ? AppColors.tealLight
+        : AppColors.amberFill;
+    final Color borderColor = toPantry ? AppColors.teal : AppColors.amber;
+    final Color iconColor = toPantry ? AppColors.teal : AppColors.amber;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: isActive ? borderColor : borderColor.withValues(alpha: 0.45),
+          width: 1.2,
+        ),
+      ),
+      child: Icon(
+        toPantry
+            ? Icons.shopping_cart_checkout_outlined
+            : Icons.account_balance_wallet_outlined,
+        color: iconColor,
+        size: 18,
+      ),
+    );
+  }
+
+  void _onFabPressed(
+    BuildContext context,
+    AsyncValue<String?> orgIdAsync,
+    AppMode appMode,
+  ) {
+    if (appMode == AppMode.pantry) {
+      _openPantryFabStub(context);
+      return;
+    }
+
+    _openAddTransactionForm(context, orgIdAsync);
+  }
+
+  void _openPantryFabStub(BuildContext context) {
+    final int branchIndex = widget.navigationShell.currentIndex;
+    String? message;
+    if (branchIndex == 6) {
+      message = 'Add item — coming soon';
+    } else if (branchIndex == 7) {
+      message = 'Use + in Breakfast, Lunch, or Dinner to add meals.';
+    }
+
+    if (message == null) {
+      return;
+    }
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _openAddTransactionForm(

@@ -537,9 +537,288 @@ Create in Supabase dashboard → Storage → New bucket → `receipts`, private.
 
 ---
 
+---
+
+## Pantry & Plan Tables
+
+All pantry tables are scoped to `org_id` and follow the same RLS pattern as budget tables. Run all SQL below in the Supabase SQL editor before starting the Pantry & Plan build.
+
+---
+
+### `pantry_stores`
+
+One row per named shopping store (e.g. "Costco", "Trader Joe's"). Each org manages its own list.
+
+```sql
+create table pantry_stores (
+  id          uuid primary key default gen_random_uuid(),
+  org_id      uuid not null references organizations(id) on delete cascade,
+  name        text not null,
+  sort_order  integer not null default 0,
+  created_at  timestamptz not null default now(),
+  unique (org_id, name)
+);
+
+alter table pantry_stores enable row level security;
+
+create policy "org members can view pantry stores"
+  on pantry_stores for select
+  using (
+    org_id in (select org_id from org_members where profile_id = auth.uid())
+  );
+
+create policy "org members can insert pantry stores"
+  on pantry_stores for insert
+  with check (
+    org_id in (select org_id from org_members where profile_id = auth.uid())
+  );
+
+create policy "org members can update pantry stores"
+  on pantry_stores for update
+  using (
+    org_id in (select org_id from org_members where profile_id = auth.uid())
+  );
+
+create policy "org members can delete pantry stores"
+  on pantry_stores for delete
+  using (
+    org_id in (select org_id from org_members where profile_id = auth.uid())
+  );
+```
+
+---
+
+### `pantry_items`
+
+Shopping list items. Each item belongs to a store. `checked` resets when user clears completed items. `is_stocked` persists across sessions.
+
+```sql
+create table pantry_items (
+  id          uuid primary key default gen_random_uuid(),
+  org_id      uuid not null references organizations(id) on delete cascade,
+  store_id    uuid not null references pantry_stores(id) on delete cascade,
+  name        text not null,
+  qty         numeric(8,2) not null default 1,
+  unit        text,
+  category    text not null default 'Other',
+  checked     boolean not null default false,
+  is_stocked  boolean not null default false,
+  price       numeric(12,2),
+  created_at  timestamptz not null default now()
+);
+
+alter table pantry_items enable row level security;
+
+create policy "org members can view pantry items"
+  on pantry_items for select
+  using (
+    org_id in (select org_id from org_members where profile_id = auth.uid())
+  );
+
+create policy "org members can insert pantry items"
+  on pantry_items for insert
+  with check (
+    org_id in (select org_id from org_members where profile_id = auth.uid())
+  );
+
+create policy "org members can update pantry items"
+  on pantry_items for update
+  using (
+    org_id in (select org_id from org_members where profile_id = auth.uid())
+  );
+
+create policy "org members can delete pantry items"
+  on pantry_items for delete
+  using (
+    org_id in (select org_id from org_members where profile_id = auth.uid())
+  );
+```
+
+---
+
+### `pantry_stocked`
+
+Persistent stocked-item registry. Drives auto-tag on shopping list entry and quick-add sheet.
+
+```sql
+create table pantry_stocked (
+  id          uuid primary key default gen_random_uuid(),
+  org_id      uuid not null references organizations(id) on delete cascade,
+  name        text not null,
+  is_active   boolean not null default true,
+  created_at  timestamptz not null default now(),
+  unique (org_id, name)
+);
+
+alter table pantry_stocked enable row level security;
+
+create policy "org members can view pantry stocked"
+  on pantry_stocked for select
+  using (
+    org_id in (select org_id from org_members where profile_id = auth.uid())
+  );
+
+create policy "org members can insert pantry stocked"
+  on pantry_stocked for insert
+  with check (
+    org_id in (select org_id from org_members where profile_id = auth.uid())
+  );
+
+create policy "org members can update pantry stocked"
+  on pantry_stocked for update
+  using (
+    org_id in (select org_id from org_members where profile_id = auth.uid())
+  );
+
+create policy "org members can delete pantry stocked"
+  on pantry_stocked for delete
+  using (
+    org_id in (select org_id from org_members where profile_id = auth.uid())
+  );
+```
+
+---
+
+### `pantry_meals`
+
+Meal library. Each meal can be reused across multiple days. `source` is `'manual'` or `'url'`.
+
+```sql
+create table pantry_meals (
+  id               uuid primary key default gen_random_uuid(),
+  org_id           uuid not null references organizations(id) on delete cascade,
+  name             text not null,
+  ingredients      text[] not null default '{}',
+  cost_per_serving numeric(12,2),
+  servings         integer not null default 1,
+  source           text not null default 'manual' check (source in ('manual', 'url')),
+  url              text,
+  created_at       timestamptz not null default now()
+);
+
+alter table pantry_meals enable row level security;
+
+create policy "org members can view pantry meals"
+  on pantry_meals for select
+  using (
+    org_id in (select org_id from org_members where profile_id = auth.uid())
+  );
+
+create policy "org members can insert pantry meals"
+  on pantry_meals for insert
+  with check (
+    org_id in (select org_id from org_members where profile_id = auth.uid())
+  );
+
+create policy "org members can update pantry meals"
+  on pantry_meals for update
+  using (
+    org_id in (select org_id from org_members where profile_id = auth.uid())
+  );
+
+create policy "org members can delete pantry meals"
+  on pantry_meals for delete
+  using (
+    org_id in (select org_id from org_members where profile_id = auth.uid())
+  );
+```
+
+---
+
+### `pantry_meal_plan`
+
+Junction table: which meals are assigned to which day of the week. `day_name` is the ISO date string (`'2026-04-07'`) so the plan is week-specific, not a repeating template.
+
+```sql
+create table pantry_meal_plan (
+  id         uuid primary key default gen_random_uuid(),
+  org_id     uuid not null references organizations(id) on delete cascade,
+  meal_id    uuid not null references pantry_meals(id) on delete cascade,
+  plan_date  date not null,
+  created_at timestamptz not null default now()
+);
+
+alter table pantry_meal_plan enable row level security;
+
+create policy "org members can view meal plan"
+  on pantry_meal_plan for select
+  using (
+    org_id in (select org_id from org_members where profile_id = auth.uid())
+  );
+
+create policy "org members can insert meal plan"
+  on pantry_meal_plan for insert
+  with check (
+    org_id in (select org_id from org_members where profile_id = auth.uid())
+  );
+
+create policy "org members can update meal plan"
+  on pantry_meal_plan for update
+  using (
+    org_id in (select org_id from org_members where profile_id = auth.uid())
+  );
+
+create policy "org members can delete meal plan"
+  on pantry_meal_plan for delete
+  using (
+    org_id in (select org_id from org_members where profile_id = auth.uid())
+  );
+```
+
+---
+
+### `pantry_deals`
+
+Static/seeded deal data in v1. In v3+ this will be populated by a live grocery API. Org-scoped so deals can eventually be personalized or location-filtered per household.
+
+```sql
+create table pantry_deals (
+  id             uuid primary key default gen_random_uuid(),
+  org_id         uuid not null references organizations(id) on delete cascade,
+  store_name     text not null,
+  item_name      text not null,
+  category       text not null default 'Other',
+  sale_price     numeric(12,2) not null,
+  original_price numeric(12,2),
+  unit           text,
+  expires_at     date,
+  created_at     timestamptz not null default now()
+);
+
+alter table pantry_deals enable row level security;
+
+create policy "org members can view pantry deals"
+  on pantry_deals for select
+  using (
+    org_id in (select org_id from org_members where profile_id = auth.uid())
+  );
+
+create policy "org members can insert pantry deals"
+  on pantry_deals for insert
+  with check (
+    org_id in (select org_id from org_members where profile_id = auth.uid())
+  );
+
+create policy "org members can update pantry deals"
+  on pantry_deals for update
+  using (
+    org_id in (select org_id from org_members where profile_id = auth.uid())
+  );
+
+create policy "org members can delete pantry deals"
+  on pantry_deals for delete
+  using (
+    org_id in (select org_id from org_members where profile_id = auth.uid())
+  );
+```
+
+---
+
 ## Notes
 
 - Supabase free plan: 1GB storage — use wisely for receipts
 - Receipt download: retrieve signed URL from Supabase Storage, trigger browser download to local disk
 - All money amounts stored as `numeric(12,2)` — never `float`
 - All dates stored as `date` (not `timestamptz`) for budget/transaction dates; `timestamptz` for `created_at`
+- `pantry_meal_plan.plan_date` uses `date` (ISO date) so plans are week-specific, not repeating
+- `pantry_items.category` uses the same category key strings as the Pantry & Plan auto-categorization logic

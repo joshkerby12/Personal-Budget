@@ -453,8 +453,134 @@ class _CsvImportLogsProviderElement
   String get orgId => (origin as CsvImportLogsProvider).orgId;
 }
 
+String _$transactionSplitsHash() => r'aa249d9fc4e23515d4cbde0fbdb370c31e00a5d6';
+
+/// See also [transactionSplits].
+@ProviderFor(transactionSplits)
+const transactionSplitsProvider = TransactionSplitsFamily();
+
+/// See also [transactionSplits].
+class TransactionSplitsFamily
+    extends Family<AsyncValue<List<TransactionSplit>>> {
+  /// See also [transactionSplits].
+  const TransactionSplitsFamily();
+
+  /// See also [transactionSplits].
+  TransactionSplitsProvider call(String transactionId) {
+    return TransactionSplitsProvider(transactionId);
+  }
+
+  @override
+  TransactionSplitsProvider getProviderOverride(
+    covariant TransactionSplitsProvider provider,
+  ) {
+    return call(provider.transactionId);
+  }
+
+  static const Iterable<ProviderOrFamily>? _dependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get dependencies => _dependencies;
+
+  static const Iterable<ProviderOrFamily>? _allTransitiveDependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get allTransitiveDependencies =>
+      _allTransitiveDependencies;
+
+  @override
+  String? get name => r'transactionSplitsProvider';
+}
+
+/// See also [transactionSplits].
+class TransactionSplitsProvider
+    extends AutoDisposeFutureProvider<List<TransactionSplit>> {
+  /// See also [transactionSplits].
+  TransactionSplitsProvider(String transactionId)
+    : this._internal(
+        (ref) => transactionSplits(ref as TransactionSplitsRef, transactionId),
+        from: transactionSplitsProvider,
+        name: r'transactionSplitsProvider',
+        debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+            ? null
+            : _$transactionSplitsHash,
+        dependencies: TransactionSplitsFamily._dependencies,
+        allTransitiveDependencies:
+            TransactionSplitsFamily._allTransitiveDependencies,
+        transactionId: transactionId,
+      );
+
+  TransactionSplitsProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.transactionId,
+  }) : super.internal();
+
+  final String transactionId;
+
+  @override
+  Override overrideWith(
+    FutureOr<List<TransactionSplit>> Function(TransactionSplitsRef provider)
+    create,
+  ) {
+    return ProviderOverride(
+      origin: this,
+      override: TransactionSplitsProvider._internal(
+        (ref) => create(ref as TransactionSplitsRef),
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        transactionId: transactionId,
+      ),
+    );
+  }
+
+  @override
+  AutoDisposeFutureProviderElement<List<TransactionSplit>> createElement() {
+    return _TransactionSplitsProviderElement(this);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is TransactionSplitsProvider &&
+        other.transactionId == transactionId;
+  }
+
+  @override
+  int get hashCode {
+    var hash = _SystemHash.combine(0, runtimeType.hashCode);
+    hash = _SystemHash.combine(hash, transactionId.hashCode);
+
+    return _SystemHash.finish(hash);
+  }
+}
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+mixin TransactionSplitsRef
+    on AutoDisposeFutureProviderRef<List<TransactionSplit>> {
+  /// The parameter `transactionId` of this provider.
+  String get transactionId;
+}
+
+class _TransactionSplitsProviderElement
+    extends AutoDisposeFutureProviderElement<List<TransactionSplit>>
+    with TransactionSplitsRef {
+  _TransactionSplitsProviderElement(super.provider);
+
+  @override
+  String get transactionId =>
+      (origin as TransactionSplitsProvider).transactionId;
+}
+
 String _$transactionControllerHash() =>
-    r'33dee52ab2e10156fd9f539f13589f0f0d2e0b5b';
+    r'0de95164662cc44800a42a3b33064b7baf9d06de';
 
 /// See also [TransactionController].
 @ProviderFor(TransactionController)

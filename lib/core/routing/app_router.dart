@@ -10,6 +10,11 @@ import '../../features/dashboard/dashboard_screen.dart';
 import '../../features/mileage/mileage_screen.dart';
 import '../../features/monthly/monthly_screen.dart';
 import '../../features/onboarding/presentation/screens/onboarding_screen.dart';
+import '../../features/pantry/cookbook/cookbook_screen.dart';
+import '../../features/pantry/deals/deals_screen.dart';
+import '../../features/pantry/meal_plan/meal_plan_screen.dart';
+import '../../features/pantry/pantry_manager/pantry_screen.dart';
+import '../../features/pantry/shopping_lists/shopping_lists_screen.dart';
 import '../../features/settings/settings_screen.dart';
 import '../../features/shell/app_shell.dart';
 import '../../features/transactions/transactions_screen.dart';
@@ -125,6 +130,56 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
                 name: AppRoutes.settingsName,
                 builder: (BuildContext context, GoRouterState state) =>
                     const SettingsScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              GoRoute(
+                path: AppRoutes.pantryLists,
+                name: AppRoutes.pantryListsName,
+                builder: (BuildContext context, GoRouterState state) =>
+                    const ShoppingListsScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              GoRoute(
+                path: AppRoutes.pantryMeals,
+                name: AppRoutes.pantryMealsName,
+                builder: (BuildContext context, GoRouterState state) =>
+                    const MealPlanScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              GoRoute(
+                path: AppRoutes.pantryCookbook,
+                name: AppRoutes.pantryCookbookName,
+                builder: (BuildContext context, GoRouterState state) =>
+                    const CookbookScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              GoRoute(
+                path: AppRoutes.pantryDeals,
+                name: AppRoutes.pantryDealsName,
+                builder: (BuildContext context, GoRouterState state) =>
+                    const DealsScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              GoRoute(
+                path: AppRoutes.pantryPantry,
+                name: AppRoutes.pantryPantryName,
+                builder: (BuildContext context, GoRouterState state) =>
+                    const PantryScreen(),
               ),
             ],
           ),

@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/transaction.dart';
 import '../models/transaction_filter.dart';
+import '../models/transaction_split.dart';
 
 class TransactionService {
   const TransactionService(this._client);
@@ -45,7 +46,59 @@ class TransactionService {
         .toList(growable: false);
   }
 
-  Future<void> insertTransaction(Transaction transaction) async {
+  Future<List<TransactionSplit>> fetchSplitsForTransaction(
+    String transactionId,
+  ) async {
+    final List<dynamic> rows = await _client
+        .from('transaction_splits')
+        .select()
+        .eq('transaction_id', transactionId)
+        .order('created_at', ascending: true);
+
+    return rows
+        .cast<Map<String, dynamic>>()
+        .map(TransactionSplit.fromJson)
+        .toList(growable: false);
+  }
+
+  Future<void> saveSplits(
+    String transactionId,
+    String orgId,
+    List<TransactionSplit> splits,
+  ) async {
+    await _client
+        .from('transaction_splits')
+        .delete()
+        .eq('transaction_id', transactionId);
+
+    if (splits.isEmpty) {
+      return;
+    }
+
+    await _client
+        .from('transaction_splits')
+        .insert(
+          splits
+              .map(
+                (TransactionSplit split) => <String, dynamic>{
+                  'id': split.id,
+                  'transaction_id': transactionId,
+                  'org_id': orgId,
+                  'category': split.category,
+                  'subcategory': split.subcategory,
+                  'amount': split.amount,
+                  'biz_pct': split.bizPct,
+                  'created_at': split.createdAt.toUtc().toIso8601String(),
+                },
+              )
+              .toList(growable: false),
+        );
+  }
+
+  Future<void> insertTransaction(
+    Transaction transaction, {
+    List<TransactionSplit>? splits,
+  }) async {
     final String? userId = _client.auth.currentUser?.id;
     if (userId == null) {
       throw StateError('You must be signed in to save a transaction.');
@@ -70,9 +123,16 @@ class TransactionService {
       'no_miles': transaction.noMiles,
       'created_at': transaction.createdAt.toUtc().toIso8601String(),
     });
+
+    if (transaction.isSplit && splits != null) {
+      await saveSplits(transaction.id, transaction.orgId, splits);
+    }
   }
 
-  Future<void> updateTransaction(Transaction transaction) async {
+  Future<void> updateTransaction(
+    Transaction transaction, {
+    List<TransactionSplit>? splits,
+  }) async {
     await _client
         .from('transactions')
         .update(<String, dynamic>{
@@ -92,6 +152,18 @@ class TransactionService {
           'no_miles': transaction.noMiles,
         })
         .eq('id', transaction.id);
+
+    if (transaction.isSplit && splits != null) {
+      await saveSplits(transaction.id, transaction.orgId, splits);
+      return;
+    }
+
+    if (!transaction.isSplit) {
+      await _client
+          .from('transaction_splits')
+          .delete()
+          .eq('transaction_id', transaction.id);
+    }
   }
 
   Future<void> deleteTransaction(String transactionId) async {

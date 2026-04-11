@@ -15,6 +15,7 @@ import '../../settings/models/budget_default.dart';
 import '../../settings/presentation/providers/settings_provider.dart';
 import '../../transactions/helpers/transaction_calculations.dart';
 import '../../transactions/models/transaction.dart';
+import '../../transactions/models/transaction_split.dart';
 import '../../transactions/presentation/providers/transaction_provider.dart';
 import '../../transactions/presentation/widgets/transaction_form.dart';
 import '../presentation/providers/monthly_provider.dart';
@@ -163,7 +164,10 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
   ) {
     final Map<String, List<MonthlyRow>> groupedRows = _groupRows(data.rows);
     final Map<String, List<Transaction>> transactionsByRowKey =
-        _groupTransactionsByRowKey(data.transactions);
+        _groupTransactionsByRowKey(
+          data.transactions,
+          data.transactionSplitsByTransactionId,
+        );
 
     // Auto-collapse all categories on mobile if none have been manually toggled
     if (widget.isMobile &&
@@ -201,6 +205,8 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
           selectedMonth: data.month,
           onChanged: (int month) => _handleMonthChange(month),
         ),
+        const SizedBox(height: AppConstants.spacingMd),
+        _buildBudgetedSummaryBar(data.rows),
         const SizedBox(height: AppConstants.spacingMd),
         if (widget.isMobile) ...<Widget>[
           _buildMobileSummaryRow(data.rows),
@@ -244,6 +250,8 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
             ),
             subtotals: data.categorySubtotals,
             transactionsByRowKey: transactionsByRowKey,
+            transactionSplitsByTransactionId:
+                data.transactionSplitsByTransactionId,
           )
         else ...<Widget>[
           _buildSummaryCharts(data),
@@ -271,6 +279,7 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
             groupedRows,
             data.categorySubtotals,
             transactionsByRowKey,
+            data.transactionSplitsByTransactionId,
           ),
         ],
         const SizedBox(height: AppConstants.spacingMd),
@@ -346,6 +355,11 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
                 onPressed: _copyDefaults,
                 icon: const Icon(Icons.content_paste_outlined, size: 16),
                 label: const Text('Copy Defaults'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => _applySuggestedBudgets(context, orgId, data),
+                icon: const Icon(Icons.auto_graph_outlined, size: 16),
+                label: const Text('Suggest Budgets'),
               ),
               OutlinedButton.icon(
                 onPressed: _cancelEditing,
@@ -473,6 +487,96 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
     );
   }
 
+  Widget _buildBudgetedSummaryBar(List<MonthlyRow> rows) {
+    final ({double income, double expenses, double net}) summary =
+        _budgetedSummary(rows);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(AppConstants.spacingMd),
+        child: LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            final int columns = constraints.maxWidth < 860 ? 2 : 3;
+            final double spacing = AppConstants.spacingSm;
+            final double totalSpacing = spacing * (columns - 1);
+            final double tileWidth =
+                (constraints.maxWidth - totalSpacing) / columns;
+
+            return Wrap(
+              spacing: spacing,
+              runSpacing: spacing,
+              children: <Widget>[
+                _buildBudgetSummaryTile(
+                  width: tileWidth,
+                  label: 'Budgeted Income',
+                  amount: summary.income,
+                  accent: AppColors.green,
+                  valueColor: AppColors.green,
+                ),
+                _buildBudgetSummaryTile(
+                  width: tileWidth,
+                  label: 'Budgeted Expenses',
+                  amount: summary.expenses,
+                  accent: AppColors.teal,
+                  valueColor: AppColors.teal,
+                ),
+                _buildBudgetSummaryTile(
+                  width: tileWidth,
+                  label: 'Projected Net',
+                  amount: summary.net,
+                  accent: summary.net >= 0 ? AppColors.green : AppColors.red,
+                  valueColor: summary.net >= 0
+                      ? AppColors.green
+                      : AppColors.red,
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBudgetSummaryTile({
+    required double width,
+    required String label,
+    required double amount,
+    required Color accent,
+    required Color valueColor,
+  }) {
+    return SizedBox(
+      width: width,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(AppConstants.spacingXs),
+          border: Border(left: BorderSide(color: accent, width: 4)),
+          color: AppColors.white,
+        ),
+        padding: const EdgeInsets.all(AppConstants.spacingSm),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              label,
+              style: AppTextStyles.label.copyWith(
+                color: AppColors.textMuted,
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(height: AppConstants.spacingXs),
+            Text(
+              _formatCurrency(amount),
+              style: AppTextStyles.amountLarge.copyWith(
+                fontSize: 19,
+                color: valueColor,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildMobileCategoryGroups({
     required String orgId,
     required MonthlyBudgetData data,
@@ -480,6 +584,8 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
     required Map<String, ({double budget, double actual, double business})>
     subtotals,
     required Map<String, List<Transaction>> transactionsByRowKey,
+    required Map<String, List<TransactionSplit>>
+    transactionSplitsByTransactionId,
   }) {
     if (groupedRows.isEmpty) {
       return const SizedBox.shrink();
@@ -614,6 +720,8 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
                                                   transactionsByRowKey[row
                                                       .key] ??
                                                   const <Transaction>[],
+                                              transactionSplitsByTransactionId:
+                                                  transactionSplitsByTransactionId,
                                             ),
                                           ),
                                         )
@@ -656,6 +764,8 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
     required bool isEditing,
     required bool isEdited,
     required List<Transaction> transactions,
+    required Map<String, List<TransactionSplit>>
+    transactionSplitsByTransactionId,
   }) {
     final bool hasBudget = row.budget > 0;
 
@@ -813,6 +923,17 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
                           .entries
                           .map((MapEntry<int, Transaction> entry) {
                             final Transaction transaction = entry.value;
+                            final _SplitDisplay splitDisplay =
+                                _resolveSplitDisplay(
+                                  transaction: transaction,
+                                  rowCategory: row.category,
+                                  rowSubcategory: row.subcategory,
+                                  transactionSplitsByTransactionId:
+                                      transactionSplitsByTransactionId,
+                                );
+                            if (!splitDisplay.shouldShow) {
+                              return const SizedBox.shrink();
+                            }
                             final String merchant =
                                 transaction.merchant.trim().isEmpty
                                 ? '—'
@@ -864,12 +985,18 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
                                       ),
                                     ),
                                     Text(
-                                      _formatCurrency(transaction.amount),
+                                      _formatCurrency(splitDisplay.amount),
                                       style: AppTextStyles.body.copyWith(
                                         fontSize: 12,
                                         fontWeight: FontWeight.w600,
                                       ),
                                     ),
+                                    if (splitDisplay.isSplit) ...<Widget>[
+                                      const SizedBox(
+                                        width: AppConstants.spacingXs,
+                                      ),
+                                      _SplitBadge(isCompact: true),
+                                    ],
                                   ],
                                 ),
                               ),
@@ -905,6 +1032,7 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
     Map<String, List<MonthlyRow>> groupedRows,
     Map<String, ({double budget, double actual, double business})> subtotals,
     Map<String, List<Transaction>> transactionsByRowKey,
+    Map<String, List<TransactionSplit>> transactionSplitsByTransactionId,
   ) {
     if (groupedRows.isEmpty) {
       return const SizedBox.shrink();
@@ -973,6 +1101,8 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
                                                 expandedSubcategoryKeys,
                                             transactionsByRowKey:
                                                 transactionsByRowKey,
+                                            transactionSplitsByTransactionId:
+                                                transactionSplitsByTransactionId,
                                           ),
                                           const SizedBox(
                                             height: AppConstants.spacingMd,
@@ -995,6 +1125,8 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
                                                 expandedSubcategoryKeys,
                                             transactionsByRowKey:
                                                 transactionsByRowKey,
+                                            transactionSplitsByTransactionId:
+                                                transactionSplitsByTransactionId,
                                           ),
                                       ],
                                     );
@@ -1024,6 +1156,8 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
     required String? inlineEditingKey,
     required Set<String> expandedSubcategoryKeys,
     required Map<String, List<Transaction>> transactionsByRowKey,
+    required Map<String, List<TransactionSplit>>
+    transactionSplitsByTransactionId,
   }) {
     final bool isIncomeSection = sectionLabel == 'Income';
     // Darker, more muted colors
@@ -1471,8 +1605,12 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
                           context,
                           orgId: orgId,
                           data: data,
+                          rowCategory: row.category,
+                          rowSubcategory: row.subcategory,
                           transactions: rowTransactions,
                           suggestedBudget: _lastMonthSpendByRowKey[row.key],
+                          transactionSplitsByTransactionId:
+                              transactionSplitsByTransactionId,
                         ),
                     ],
                   );
@@ -3101,6 +3239,101 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
     _editedKeysNotifier.value = Set<String>.from(_editingRows.keys);
   }
 
+  Future<void> _applySuggestedBudgets(
+    BuildContext context,
+    String orgId,
+    MonthlyBudgetData data,
+  ) async {
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    final DateTime selectedMonth = DateTime.utc(data.year, data.month, 1);
+    try {
+      final List<Transaction> transactions = await ref.read(
+        priorMonthsTransactionsProvider(
+          orgId: orgId,
+          selectedMonth: selectedMonth,
+          monthCount: 3,
+        ).future,
+      );
+
+      if (!mounted || !_isEditingNotifier.value) {
+        return;
+      }
+
+      final Map<String, Map<String, double>> spendingBySubcategoryByMonth =
+          <String, Map<String, double>>{};
+
+      for (final Transaction transaction in transactions) {
+        if (isIncome(transaction.category) ||
+            isTransfer(transaction.category)) {
+          continue;
+        }
+
+        final String rowKey =
+            '${transaction.category}\u0000${transaction.subcategory}';
+        final String monthKey =
+            '${transaction.date.year}-${transaction.date.month.toString().padLeft(2, '0')}';
+        final Map<String, double> monthTotals = spendingBySubcategoryByMonth
+            .putIfAbsent(rowKey, () => <String, double>{});
+        monthTotals[monthKey] =
+            (monthTotals[monthKey] ?? 0) + transaction.amount;
+      }
+
+      int appliedCount = 0;
+      final Set<String> edited = Set<String>.of(_editedKeysNotifier.value);
+      for (final MapEntry<String, Map<String, double>> entry
+          in spendingBySubcategoryByMonth.entries) {
+        final TextEditingController? controller = _controllers[entry.key];
+        if (controller == null) {
+          continue;
+        }
+
+        final List<double> nonZeroMonthTotals = entry.value.values
+            .where((double total) => total >= 0.01)
+            .toList(growable: false);
+        if (nonZeroMonthTotals.isEmpty) {
+          continue;
+        }
+
+        final double average =
+            nonZeroMonthTotals.reduce((double sum, double v) {
+              return sum + v;
+            }) /
+            nonZeroMonthTotals.length;
+        final double rounded = average.roundToDouble();
+        controller.text = _formatBudgetInput(rounded);
+        edited.add(entry.key);
+        appliedCount += 1;
+      }
+
+      if (appliedCount == 0) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text(
+              'No 3-month spending history matched your budget rows.',
+            ),
+          ),
+        );
+        return;
+      }
+
+      _editedKeysNotifier.value = edited;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Suggested budgets applied to $appliedCount subcategories. Review and save to keep changes.',
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Unable to suggest budgets right now.')),
+      );
+    }
+  }
+
   void _cancelEditing() {
     _disposeControllers();
     _editingRows.clear();
@@ -3443,7 +3676,7 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
       await ref.read(mileageControllerProvider.notifier).saveTrip(trip);
       await ref
           .read(transactionControllerProvider.notifier)
-          .save(transaction.copyWith(noMiles: false), isEdit: true);
+          .save(transaction.copyWith(noMiles: true), isEdit: true);
 
       if (!mounted) {
         return;
@@ -3569,14 +3802,95 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
   String _transactionKey(Transaction transaction) =>
       '${transaction.category}\u0000${transaction.subcategory}';
 
+  String _transactionSplitKey(TransactionSplit split) =>
+      '${split.category}\u0000${split.subcategory}';
+
+  _SplitDisplay _resolveSplitDisplay({
+    required Transaction transaction,
+    required String rowCategory,
+    required String rowSubcategory,
+    required Map<String, List<TransactionSplit>>
+    transactionSplitsByTransactionId,
+  }) {
+    if (!transaction.isSplit) {
+      return _SplitDisplay(
+        amount: transaction.amount,
+        bizPct: transaction.bizPct,
+        isSplit: false,
+        shouldShow: true,
+      );
+    }
+
+    final List<TransactionSplit> splits =
+        transactionSplitsByTransactionId[transaction.id] ??
+        const <TransactionSplit>[];
+    if (splits.isEmpty) {
+      return const _SplitDisplay(
+        amount: 0,
+        bizPct: 0,
+        isSplit: true,
+        shouldShow: false,
+      );
+    }
+
+    final List<TransactionSplit> matching = splits
+        .where(
+          (TransactionSplit split) =>
+              split.category == rowCategory &&
+              split.subcategory == rowSubcategory,
+        )
+        .toList(growable: false);
+
+    if (matching.isEmpty) {
+      return const _SplitDisplay(
+        amount: 0,
+        bizPct: 0,
+        isSplit: true,
+        shouldShow: false,
+      );
+    }
+
+    final double amount = matching.fold<double>(
+      0,
+      (double sum, TransactionSplit split) => sum + split.amount,
+    );
+    final double weightedBizNumerator = matching.fold<double>(
+      0,
+      (double sum, TransactionSplit split) =>
+          sum + (split.amount * split.bizPct),
+    );
+    final double bizPct = amount > 0
+        ? (weightedBizNumerator / amount).clamp(0, 1)
+        : 0;
+
+    return _SplitDisplay(
+      amount: amount,
+      bizPct: bizPct,
+      isSplit: true,
+      shouldShow: true,
+    );
+  }
+
   Map<String, List<Transaction>> _groupTransactionsByRowKey(
     List<Transaction> transactions,
+    Map<String, List<TransactionSplit>> transactionSplitsByTransactionId,
   ) {
     final Map<String, List<Transaction>> grouped =
         <String, List<Transaction>>{};
     for (final Transaction transaction in transactions) {
-      final String key = _transactionKey(transaction);
-      grouped.putIfAbsent(key, () => <Transaction>[]).add(transaction);
+      if (!transaction.isSplit) {
+        final String key = _transactionKey(transaction);
+        grouped.putIfAbsent(key, () => <Transaction>[]).add(transaction);
+        continue;
+      }
+
+      final List<TransactionSplit> splits =
+          transactionSplitsByTransactionId[transaction.id] ??
+          const <TransactionSplit>[];
+      final Set<String> splitKeys = splits.map(_transactionSplitKey).toSet();
+      for (final String key in splitKeys) {
+        grouped.putIfAbsent(key, () => <Transaction>[]).add(transaction);
+      }
     }
     return grouped;
   }
@@ -3585,8 +3899,12 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
     BuildContext context, {
     required String orgId,
     required MonthlyBudgetData data,
+    required String rowCategory,
+    required String rowSubcategory,
     required List<Transaction> transactions,
     required double? suggestedBudget,
+    required Map<String, List<TransactionSplit>>
+    transactionSplitsByTransactionId,
   }) {
     return Container(
       margin: const EdgeInsets.only(
@@ -3620,6 +3938,16 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
             MapEntry<int, Transaction> entry,
           ) {
             final Transaction transaction = entry.value;
+            final _SplitDisplay splitDisplay = _resolveSplitDisplay(
+              transaction: transaction,
+              rowCategory: rowCategory,
+              rowSubcategory: rowSubcategory,
+              transactionSplitsByTransactionId:
+                  transactionSplitsByTransactionId,
+            );
+            if (!splitDisplay.shouldShow) {
+              return const SizedBox.shrink();
+            }
             final String merchant = transaction.merchant.trim().isEmpty
                 ? '—'
                 : transaction.merchant;
@@ -3666,19 +3994,28 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
                     ),
                     Expanded(
                       flex: 2,
-                      child: Text(
-                        _formatCurrency(transaction.amount),
-                        textAlign: TextAlign.right,
-                        style: AppTextStyles.body.copyWith(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: <Widget>[
+                          Text(
+                            _formatCurrency(splitDisplay.amount),
+                            textAlign: TextAlign.right,
+                            style: AppTextStyles.body.copyWith(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          if (splitDisplay.isSplit) ...<Widget>[
+                            const SizedBox(width: 4),
+                            const _SplitBadge(),
+                          ],
+                        ],
                       ),
                     ),
                     Expanded(
                       flex: 1,
                       child: Text(
-                        '${(transaction.bizPct * 100).toStringAsFixed(0)}%',
+                        '${(splitDisplay.bizPct * 100).toStringAsFixed(0)}%',
                         textAlign: TextAlign.right,
                         style: AppTextStyles.label.copyWith(fontSize: 11),
                       ),
@@ -3736,6 +4073,23 @@ class _MonthlyBudgetViewState extends ConsumerState<MonthlyBudgetView> {
         income += row.actual;
       } else {
         expenses += row.actual;
+      }
+    }
+
+    return (income: income, expenses: expenses, net: income - expenses);
+  }
+
+  ({double income, double expenses, double net}) _budgetedSummary(
+    List<MonthlyRow> rows,
+  ) {
+    double income = 0;
+    double expenses = 0;
+
+    for (final MonthlyRow row in rows) {
+      if (isIncome(row.category)) {
+        income += row.budget;
+      } else {
+        expenses += row.budget;
       }
     }
 
@@ -4009,6 +4363,50 @@ class _BudgetActualBar extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SplitDisplay {
+  const _SplitDisplay({
+    required this.amount,
+    required this.bizPct,
+    required this.isSplit,
+    required this.shouldShow,
+  });
+
+  final double amount;
+  final double bizPct;
+  final bool isSplit;
+  final bool shouldShow;
+}
+
+class _SplitBadge extends StatelessWidget {
+  const _SplitBadge({this.isCompact = false});
+
+  final bool isCompact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: isCompact ? 4 : 6,
+        vertical: isCompact ? 1 : 2,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.tealLight,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.teal),
+      ),
+      child: Text(
+        'split',
+        style: AppTextStyles.label.copyWith(
+          fontSize: isCompact ? 9 : 10,
+          color: AppColors.teal,
+          fontWeight: FontWeight.w700,
+          height: 1,
+        ),
       ),
     );
   }

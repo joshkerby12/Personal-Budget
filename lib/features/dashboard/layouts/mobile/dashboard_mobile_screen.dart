@@ -144,6 +144,8 @@ class DashboardMobileScreen extends ConsumerWidget {
                             ),
                             const SizedBox(height: AppConstants.spacingMd),
                             _SummaryGrid(summary: summary),
+                            const SizedBox(height: AppConstants.spacingSm),
+                            _BudgetedSummaryGrid(summary: summary),
                             const SizedBox(height: AppConstants.spacingMd),
                             Card(
                               child: Padding(
@@ -297,6 +299,54 @@ class _SummaryGrid extends StatelessWidget {
               value: _currencyFormat.format(summary.rangeBusiness),
               accent: _businessPurple,
               valueColor: AppColors.textMuted,
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _BudgetedSummaryGrid extends StatelessWidget {
+  const _BudgetedSummaryGrid({required this.summary});
+
+  final DashboardSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final double tileWidth =
+            (constraints.maxWidth - AppConstants.spacingSm) / 2;
+
+        return Wrap(
+          spacing: AppConstants.spacingSm,
+          runSpacing: AppConstants.spacingSm,
+          children: <Widget>[
+            _SummaryTile(
+              width: tileWidth,
+              label: 'Budgeted Income',
+              value: _currencyFormat.format(summary.budgetedIncome),
+              accent: AppColors.green,
+              valueColor: AppColors.green,
+            ),
+            _SummaryTile(
+              width: tileWidth,
+              label: 'Budgeted Expenses',
+              value: _currencyFormat.format(summary.budgetedExpenses),
+              accent: AppColors.teal,
+              valueColor: AppColors.teal,
+            ),
+            _SummaryTile(
+              width: tileWidth,
+              label: 'Projected Net',
+              value: _currencyFormat.format(summary.projectedNet),
+              accent: summary.projectedNet >= 0
+                  ? AppColors.green
+                  : AppColors.red,
+              valueColor: summary.projectedNet >= 0
+                  ? AppColors.green
+                  : AppColors.red,
             ),
           ],
         );

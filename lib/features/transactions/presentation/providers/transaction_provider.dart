@@ -9,6 +9,7 @@ import '../../helpers/csv_parser.dart';
 import '../../models/csv_import_log.dart';
 import '../../models/transaction.dart';
 import '../../models/transaction_filter.dart';
+import '../../models/transaction_split.dart';
 
 part 'transaction_provider.g.dart';
 
@@ -65,24 +66,39 @@ Future<List<CsvImportLog>> csvImportLogs(Ref ref, String orgId) async {
 }
 
 @riverpod
+Future<List<TransactionSplit>> transactionSplits(
+  Ref ref,
+  String transactionId,
+) async {
+  return ref
+      .read(transactionServiceProvider)
+      .fetchSplitsForTransaction(transactionId);
+}
+
+@riverpod
 class TransactionController extends _$TransactionController {
   @override
   AsyncValue<void> build() => const AsyncData<void>(null);
 
-  Future<void> save(Transaction transaction, {bool isEdit = false}) async {
+  Future<void> save(
+    Transaction transaction, {
+    bool isEdit = false,
+    List<TransactionSplit>? splits,
+  }) async {
     state = const AsyncLoading<void>();
     state = await AsyncValue.guard(() async {
       if (isEdit) {
         await ref
             .read(transactionServiceProvider)
-            .updateTransaction(transaction);
+            .updateTransaction(transaction, splits: splits);
       } else {
         await ref
             .read(transactionServiceProvider)
-            .insertTransaction(transaction);
+            .insertTransaction(transaction, splits: splits);
       }
 
       ref.invalidate(transactionsProvider(transaction.orgId));
+      ref.invalidate(transactionSplitsProvider(transaction.id));
     });
 
     if (state.hasError) {
