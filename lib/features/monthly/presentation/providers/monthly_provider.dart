@@ -49,6 +49,7 @@ Future<MonthlyBudgetData> monthlyBudgetData(
       .from('transactions')
       .select()
       .eq('org_id', orgId)
+      .neq('category', 'Transfers')
       .gte('date', monthStartString)
       .lt('date', monthEndString)
       .order('date', ascending: true)
@@ -274,7 +275,7 @@ Future<MonthlyBudgetData> monthlyBudgetData(
     if (isIncome(row.category)) {
       monthIncome += row.actual;
     }
-    if (!isTransfer(row.category)) totalBudgeted += row.budget;
+    if (!isTransfer(row.category) && !isIncome(row.category)) totalBudgeted += row.budget;
   }
 
   return MonthlyBudgetData(

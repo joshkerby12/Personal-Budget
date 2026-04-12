@@ -71,6 +71,89 @@ Future<List<BudgetDefault>> budgetDefaults(Ref ref, String orgId) async {
   return ref.read(settingsServiceProvider).ensureGlobalDefaults(orgId);
 }
 
+/// Returns a map of category → subcategory → average monthly spend
+/// based on the last 3 complete calendar months.
+@riverpod
+Future<Map<String, Map<String, double>>> spendingAverages(
+  Ref ref,
+  String orgId,
+) async {
+  final client = ref.watch(supabaseClientProvider);
+  final now = DateTime.now();
+
+  // Start of the month 3 months ago, end of last month
+  final from = DateTime(now.year, now.month - 3, 1);
+  final to = DateTime(now.year, now.month, 1);
+
+  final String fromStr =
+      '${from.year}-${from.month.toString().padLeft(2, '0')}-01';
+  final String toStr =
+      '${to.year}-${to.month.toString().padLeft(2, '0')}-01';
+
+  final List<dynamic> rows = await client
+      .from('transactions')
+      .select('id, date, category, subcategory, amount, is_split, transaction_splits(category, subcategory, amount)')
+      .eq('org_id', orgId)
+      .gte('date', fromStr)
+      .lt('date', toStr)
+      .neq('category', 'Uncategorized')
+      .neq('category', 'Transfers');
+
+  // Accumulate total spend per (category, subcategory, month)
+  final Map<String, Map<String, Map<String, double>>> byMonth =
+      <String, Map<String, Map<String, double>>>{};
+
+  void accumulate(String category, String subcategory, double amount, String month) {
+    if (category.isEmpty || category == 'Uncategorized' || category == 'Transfers') {
+      return;
+    }
+    byMonth
+        .putIfAbsent(category, () => <String, Map<String, double>>{})
+        .putIfAbsent(subcategory, () => <String, double>{})
+        .update(month, (double v) => v + amount, ifAbsent: () => amount);
+  }
+
+  for (final dynamic r in rows) {
+    final String date = r['date'] as String;
+    final String month = date.substring(0, 7); // 'YYYY-MM'
+    final bool isSplit = r['is_split'] as bool? ?? false;
+    final List<dynamic> splits = r['transaction_splits'] as List<dynamic>? ?? <dynamic>[];
+
+    if (isSplit && splits.isNotEmpty) {
+      // Use split amounts — they have the real per-category breakdown
+      for (final dynamic s in splits) {
+        final String cat = s['category'] as String? ?? '';
+        final String sub = s['subcategory'] as String? ?? '';
+        final double amt = (s['amount'] as num).toDouble();
+        accumulate(cat, sub, amt, month);
+      }
+    } else {
+      final String category = r['category'] as String? ?? '';
+      final String subcategory = r['subcategory'] as String? ?? '';
+      final double amount = (r['amount'] as num).toDouble();
+      accumulate(category, subcategory, amount, month);
+    }
+  }
+
+  // Average across the 3 months
+  final Map<String, Map<String, double>> result =
+      <String, Map<String, double>>{};
+  for (final MapEntry<String, Map<String, Map<String, double>>> catEntry
+      in byMonth.entries) {
+    for (final MapEntry<String, Map<String, double>> subEntry
+        in catEntry.value.entries) {
+      final double total =
+          subEntry.value.values.fold(0.0, (double a, double b) => a + b);
+      final double avg = total / 3.0;
+      result
+          .putIfAbsent(catEntry.key, () => <String, double>{})[subEntry.key] =
+          avg;
+    }
+  }
+
+  return result;
+}
+
 @riverpod
 class SettingsController extends _$SettingsController {
   @override

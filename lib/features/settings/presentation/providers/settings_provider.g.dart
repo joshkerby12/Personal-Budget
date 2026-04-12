@@ -558,6 +558,151 @@ class _BudgetDefaultsProviderElement
   String get orgId => (origin as BudgetDefaultsProvider).orgId;
 }
 
+String _$spendingAveragesHash() => r'95d0ccbc44626160438e20fc79d83317e124f772';
+
+/// Returns a map of category → subcategory → average monthly spend
+/// based on the last 3 complete calendar months.
+///
+/// Copied from [spendingAverages].
+@ProviderFor(spendingAverages)
+const spendingAveragesProvider = SpendingAveragesFamily();
+
+/// Returns a map of category → subcategory → average monthly spend
+/// based on the last 3 complete calendar months.
+///
+/// Copied from [spendingAverages].
+class SpendingAveragesFamily
+    extends Family<AsyncValue<Map<String, Map<String, double>>>> {
+  /// Returns a map of category → subcategory → average monthly spend
+  /// based on the last 3 complete calendar months.
+  ///
+  /// Copied from [spendingAverages].
+  const SpendingAveragesFamily();
+
+  /// Returns a map of category → subcategory → average monthly spend
+  /// based on the last 3 complete calendar months.
+  ///
+  /// Copied from [spendingAverages].
+  SpendingAveragesProvider call(String orgId) {
+    return SpendingAveragesProvider(orgId);
+  }
+
+  @override
+  SpendingAveragesProvider getProviderOverride(
+    covariant SpendingAveragesProvider provider,
+  ) {
+    return call(provider.orgId);
+  }
+
+  static const Iterable<ProviderOrFamily>? _dependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get dependencies => _dependencies;
+
+  static const Iterable<ProviderOrFamily>? _allTransitiveDependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get allTransitiveDependencies =>
+      _allTransitiveDependencies;
+
+  @override
+  String? get name => r'spendingAveragesProvider';
+}
+
+/// Returns a map of category → subcategory → average monthly spend
+/// based on the last 3 complete calendar months.
+///
+/// Copied from [spendingAverages].
+class SpendingAveragesProvider
+    extends AutoDisposeFutureProvider<Map<String, Map<String, double>>> {
+  /// Returns a map of category → subcategory → average monthly spend
+  /// based on the last 3 complete calendar months.
+  ///
+  /// Copied from [spendingAverages].
+  SpendingAveragesProvider(String orgId)
+    : this._internal(
+        (ref) => spendingAverages(ref as SpendingAveragesRef, orgId),
+        from: spendingAveragesProvider,
+        name: r'spendingAveragesProvider',
+        debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+            ? null
+            : _$spendingAveragesHash,
+        dependencies: SpendingAveragesFamily._dependencies,
+        allTransitiveDependencies:
+            SpendingAveragesFamily._allTransitiveDependencies,
+        orgId: orgId,
+      );
+
+  SpendingAveragesProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.orgId,
+  }) : super.internal();
+
+  final String orgId;
+
+  @override
+  Override overrideWith(
+    FutureOr<Map<String, Map<String, double>>> Function(
+      SpendingAveragesRef provider,
+    )
+    create,
+  ) {
+    return ProviderOverride(
+      origin: this,
+      override: SpendingAveragesProvider._internal(
+        (ref) => create(ref as SpendingAveragesRef),
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        orgId: orgId,
+      ),
+    );
+  }
+
+  @override
+  AutoDisposeFutureProviderElement<Map<String, Map<String, double>>>
+  createElement() {
+    return _SpendingAveragesProviderElement(this);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is SpendingAveragesProvider && other.orgId == orgId;
+  }
+
+  @override
+  int get hashCode {
+    var hash = _SystemHash.combine(0, runtimeType.hashCode);
+    hash = _SystemHash.combine(hash, orgId.hashCode);
+
+    return _SystemHash.finish(hash);
+  }
+}
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+mixin SpendingAveragesRef
+    on AutoDisposeFutureProviderRef<Map<String, Map<String, double>>> {
+  /// The parameter `orgId` of this provider.
+  String get orgId;
+}
+
+class _SpendingAveragesProviderElement
+    extends AutoDisposeFutureProviderElement<Map<String, Map<String, double>>>
+    with SpendingAveragesRef {
+  _SpendingAveragesProviderElement(super.provider);
+
+  @override
+  String get orgId => (origin as SpendingAveragesProvider).orgId;
+}
+
 String _$settingsControllerHash() =>
     r'daaee8fdb7cc96d9a9b621d6686948dfa6db9c81';
 
