@@ -40,6 +40,7 @@ class SettingsEditor extends ConsumerStatefulWidget {
   final bool isMobile;
   final bool showDataSection;
 
+
   @override
   ConsumerState<SettingsEditor> createState() => _SettingsEditorState();
 }
@@ -171,6 +172,9 @@ class _SettingsEditorState extends ConsumerState<SettingsEditor> {
     final bool isSubmitting =
         ref.watch(settingsControllerProvider).isLoading ||
         _isRegeneratingInviteCode;
+    final Map<String, Map<String, double>> spendingAvgs = ref
+        .watch(spendingAveragesProvider(widget.orgId))
+        .valueOrNull ?? const <String, Map<String, double>>{};
     final AsyncValue<List<TellerEnrollment>> enrollmentsAsync = ref.watch(
       tellerEnrollmentsProvider(widget.orgId),
     );
@@ -204,7 +208,7 @@ class _SettingsEditorState extends ConsumerState<SettingsEditor> {
           if (widget.isMobile) ...<Widget>[
             _buildMileageRateCard(isSubmitting),
             const SizedBox(height: AppConstants.spacingMd),
-            _buildBudgetDefaultsCard(isSubmitting),
+            _buildBudgetDefaultsCard(isSubmitting, spendingAvgs),
           ] else ...<Widget>[
             LayoutBuilder(
               builder: (BuildContext context, BoxConstraints constraints) {
@@ -215,7 +219,7 @@ class _SettingsEditorState extends ConsumerState<SettingsEditor> {
                     children: <Widget>[
                       _buildMileageRateCard(isSubmitting),
                       const SizedBox(height: AppConstants.spacingMd),
-                      _buildBudgetDefaultsCard(isSubmitting),
+                      _buildBudgetDefaultsCard(isSubmitting, spendingAvgs),
                     ],
                   );
                 }
@@ -227,7 +231,7 @@ class _SettingsEditorState extends ConsumerState<SettingsEditor> {
                     const SizedBox(width: AppConstants.spacingMd),
                     Expanded(
                       flex: 2,
-                      child: _buildBudgetDefaultsCard(isSubmitting),
+                      child: _buildBudgetDefaultsCard(isSubmitting, spendingAvgs),
                     ),
                   ],
                 );
@@ -641,7 +645,10 @@ class _SettingsEditorState extends ConsumerState<SettingsEditor> {
     );
   }
 
-  Widget _buildBudgetDefaultsCard(bool isSubmitting) {
+  Widget _buildBudgetDefaultsCard(
+    bool isSubmitting,
+    Map<String, Map<String, double>> spendingAvgs,
+  ) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(AppConstants.spacingLg),
@@ -684,8 +691,8 @@ class _SettingsEditorState extends ConsumerState<SettingsEditor> {
                     final LinkedHashMap<String, List<_BudgetRow>> grouped =
                         _groupByCategory(rows);
                     return widget.isMobile
-                        ? _buildMobileBudgetGroups(grouped)
-                        : _buildDesktopBudgetGroups(grouped);
+                        ? _buildMobileBudgetGroups(grouped, spendingAvgs)
+                        : _buildDesktopBudgetGroups(grouped, spendingAvgs);
                   },
             ),
           ],
@@ -696,6 +703,7 @@ class _SettingsEditorState extends ConsumerState<SettingsEditor> {
 
   Widget _buildDesktopBudgetGroups(
     LinkedHashMap<String, List<_BudgetRow>> grouped,
+    Map<String, Map<String, double>> spendingAvgs,
   ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -770,8 +778,11 @@ class _SettingsEditorState extends ConsumerState<SettingsEditor> {
                         .asMap()
                         .entries
                         .map(
-                          (MapEntry<int, _BudgetRow> e) =>
-                              _buildDesktopRow(e.value, index: e.key),
+                          (MapEntry<int, _BudgetRow> e) => _buildDesktopRow(
+                            e.value,
+                            index: e.key,
+                            spendingAvgs: spendingAvgs,
+                          ),
                         )
                         .toList(growable: false),
                   ),
@@ -791,7 +802,11 @@ class _SettingsEditorState extends ConsumerState<SettingsEditor> {
     );
   }
 
-  Widget _buildDesktopRow(_BudgetRow row, {required int index}) {
+  Widget _buildDesktopRow(
+    _BudgetRow row, {
+    required int index,
+    required Map<String, Map<String, double>> spendingAvgs,
+  }) {
     return Container(
       key: ValueKey<String>(row.localKey),
       color: row.isNew ? AppColors.greenFill : AppColors.white,
@@ -816,7 +831,10 @@ class _SettingsEditorState extends ConsumerState<SettingsEditor> {
           const SizedBox(width: AppConstants.spacingSm),
           Expanded(flex: 3, child: _buildSubcategoryCell(row, compact: false)),
           const SizedBox(width: AppConstants.spacingSm),
-          Expanded(flex: 2, child: _buildAmountField(row, compact: false)),
+          Expanded(
+            flex: 2,
+            child: _buildAmountField(row, compact: false, spendingAvgs: spendingAvgs),
+          ),
           const SizedBox(width: AppConstants.spacingSm),
           Expanded(flex: 2, child: _buildBizPctField(row, compact: false)),
           SizedBox(
@@ -849,6 +867,7 @@ class _SettingsEditorState extends ConsumerState<SettingsEditor> {
 
   Widget _buildMobileBudgetGroups(
     LinkedHashMap<String, List<_BudgetRow>> grouped,
+    Map<String, Map<String, double>> spendingAvgs,
   ) {
     return ValueListenableBuilder<Set<String>>(
       valueListenable: _expandedCategoriesNotifier,
@@ -918,7 +937,10 @@ class _SettingsEditorState extends ConsumerState<SettingsEditor> {
                             ),
                             child: Column(
                               children: <Widget>[
-                                ...entry.value.map(_buildMobileRow),
+                                ...entry.value.map(
+                                  (_BudgetRow r) =>
+                                      _buildMobileRow(r, spendingAvgs),
+                                ),
                                 Align(
                                   alignment: Alignment.centerLeft,
                                   child: TextButton.icon(
@@ -942,7 +964,10 @@ class _SettingsEditorState extends ConsumerState<SettingsEditor> {
     );
   }
 
-  Widget _buildMobileRow(_BudgetRow row) {
+  Widget _buildMobileRow(
+    _BudgetRow row,
+    Map<String, Map<String, double>> spendingAvgs,
+  ) {
     return Container(
       margin: const EdgeInsets.only(bottom: AppConstants.spacingSm),
       padding: const EdgeInsets.all(AppConstants.spacingSm),
@@ -957,7 +982,13 @@ class _SettingsEditorState extends ConsumerState<SettingsEditor> {
           const SizedBox(height: AppConstants.spacingSm),
           Row(
             children: <Widget>[
-              Expanded(child: _buildAmountField(row, compact: true)),
+              Expanded(
+                child: _buildAmountField(
+                  row,
+                  compact: true,
+                  spendingAvgs: spendingAvgs,
+                ),
+              ),
               const SizedBox(width: AppConstants.spacingSm),
               Expanded(child: _buildBizPctField(row, compact: true)),
               IconButton(
@@ -1033,33 +1064,129 @@ class _SettingsEditorState extends ConsumerState<SettingsEditor> {
     );
   }
 
-  Widget _buildAmountField(_BudgetRow row, {required bool compact}) {
+  Widget _buildAmountField(
+    _BudgetRow row, {
+    required bool compact,
+    required Map<String, Map<String, double>> spendingAvgs,
+  }) {
     final TextEditingController controller = _amountControllers[row.localKey]!;
+    final String subcategory = _nameControllers[row.localKey]?.text ?? '';
+    final double? avg = spendingAvgs[row.category]?[subcategory];
+
     return ValueListenableBuilder<Set<String>>(
       valueListenable: _editingRowsNotifier,
       builder: (BuildContext context, Set<String> editingRows, _) {
         final bool isEditing = row.isNew || editingRows.contains(row.localKey);
         if (isEditing) {
-          return TextField(
-            controller: controller,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: InputDecoration(
-              labelText: compact ? 'Amount' : 'Monthly Amount',
-              prefixText: r'$ ',
-              isDense: compact,
-              filled: true,
-              fillColor: row.isNew ? AppColors.greenFill : AppColors.amberFill,
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              TextField(
+                controller: controller,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(
+                  labelText: compact ? 'Amount' : 'Monthly Amount',
+                  prefixText: r'$ ',
+                  isDense: compact,
+                  filled: true,
+                  fillColor:
+                      row.isNew ? AppColors.greenFill : AppColors.amberFill,
+                ),
+              ),
+              if (avg != null)
+                GestureDetector(
+                  onTap: () {
+                    controller.text = avg.toStringAsFixed(2);
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      '3-mo avg: \$${avg.toStringAsFixed(2)} — tap to use',
+                      style: AppTextStyles.label.copyWith(
+                        color: AppColors.navy,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          );
+        }
+        final double? currentAmount = double.tryParse(controller.text);
+        final bool isUnset = currentAmount == null || currentAmount == 0;
+        final bool isDifferent = avg != null &&
+            currentAmount != null &&
+            currentAmount > 0 &&
+            (currentAmount - avg).abs() > 0.99;
+
+        if (isUnset && avg != null) {
+          return InkWell(
+            onTap: () {
+              controller.text = avg.toStringAsFixed(2);
+              _toggleRowEditing(row.localKey, true);
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                vertical: AppConstants.spacingXs,
+              ),
+              child: Text(
+                'Use avg: \$${avg.toStringAsFixed(2)}/mo',
+                style: AppTextStyles.label.copyWith(
+                  color: AppColors.navy,
+                  fontWeight: FontWeight.w600,
+                  decoration: TextDecoration.underline,
+                ),
+              ),
             ),
           );
         }
-        return InkWell(
-          onTap: () => _toggleRowEditing(row.localKey, true),
-          child: Container(
-            padding: const EdgeInsets.symmetric(
-              vertical: AppConstants.spacingSm,
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            InkWell(
+              onTap: () => _toggleRowEditing(row.localKey, true),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  vertical: AppConstants.spacingXs,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text('\$${controller.text}', style: AppTextStyles.body),
+                    if (avg != null && !isDifferent)
+                      Text(
+                        '3-mo avg: \$${avg.toStringAsFixed(2)}',
+                        style: AppTextStyles.label.copyWith(
+                          color: AppColors.textMuted,
+                          fontSize: 11,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
             ),
-            child: Text('\$${controller.text}', style: AppTextStyles.body),
-          ),
+            if (isDifferent)
+              InkWell(
+                onTap: () {
+                  controller.text = avg.toStringAsFixed(2);
+                  _toggleRowEditing(row.localKey, true);
+                },
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: Text(
+                    'Avg \$${avg.toStringAsFixed(2)} — update?',
+                    style: AppTextStyles.label.copyWith(
+                      color: AppColors.amber,
+                      fontWeight: FontWeight.w600,
+                      decoration: TextDecoration.underline,
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+              ),
+          ],
         );
       },
     );
