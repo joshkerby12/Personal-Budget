@@ -454,6 +454,36 @@ Active task queue. Claude authors and scopes all tasks. Codex picks up `ready` t
 
 ---
 
+### TASK-050 · Monthly overview — hide personal/business % from Expenses label on mobile
+- **Status:** ready
+- **Depends on:** none
+- **Scope:** The "Expenses" summary tile label on the monthly overview reads `Expenses (personal X% / business X%)` which overflows its box on mobile. On mobile, truncate it to just `Expenses`.
+
+  **File:** `lib/features/monthly/widgets/monthly_budget_view.dart`
+
+  There are two occurrences of the label string — one in the mobile summary builder and one in the desktop summary builder. Both are near identical:
+
+  ```dart
+  'Expenses (personal ${(personalPct * 100).toStringAsFixed(0)}% / business ${(bizPct * 100).toStringAsFixed(0)}%)'
+  ```
+
+  This string appears at approximately **line 2297** and **line 2395**.
+
+  For each occurrence, replace the hardcoded string with a conditional based on whether we're in the mobile layout. The mobile/desktop distinction is already determined by the `isMobile` bool (from `MediaQuery`) already in scope in that widget, or use `LayoutBuilder` / check `MediaQuery.sizeOf(context).width < AppConstants.mobileBreakpoint`.
+
+  Change to:
+  ```dart
+  isMobile
+    ? 'Expenses'
+    : 'Expenses (personal ${(personalPct * 100).toStringAsFixed(0)}% / business ${(bizPct * 100).toStringAsFixed(0)}%)'
+  ```
+
+  If `isMobile` is not already in scope at those call sites, read the surrounding context to find the right way to get it (the widget likely already has access via the build method or a local variable).
+
+- **When done:** Mark `done`, move to Completed Tasks table
+
+---
+
 ### TASK-049 · Pull-to-refresh on all main screens
 - **Status:** ready
 - **Depends on:** none
