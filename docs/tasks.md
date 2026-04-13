@@ -454,6 +454,45 @@ Active task queue. Claude authors and scopes all tasks. Codex picks up `ready` t
 
 ---
 
+### TASK-049 · Pull-to-refresh on all main screens
+- **Status:** ready
+- **Depends on:** none
+- **Scope:** Wrap the scrollable content on every main screen with `RefreshIndicator` so the user can drag down to reload data. Both mobile and desktop (web) layouts need this.
+
+  **Screens to update** (mobile + web layout files for each):
+  - Transactions — invalidate `transactionsProvider`
+  - Monthly — invalidate `monthlyProvider`
+  - Dashboard — invalidate `dashboardProvider`
+  - Settings — invalidate `settingsProvider` and `spendingAveragesProvider`
+  - Mileage — invalidate `mileageTripsProvider`
+  - Business — invalidate `businessTransactionsProvider`
+  - Receipts — invalidate `receiptsProvider`
+
+  **Implementation pattern:**
+
+  For each screen, find the outermost scrollable widget (`ListView`, `SingleChildScrollView`, `CustomScrollView`, etc.) and wrap it with `RefreshIndicator`:
+
+  ```dart
+  RefreshIndicator(
+    onRefresh: () async {
+      ref.invalidate(someProvider(orgId));
+      // invalidate all providers this screen depends on
+      await ref.read(someProvider(orgId).future);
+    },
+    child: /* existing scrollable widget */,
+  )
+  ```
+
+  - The `onRefresh` callback must `await` at least one provider future so the spinner stays visible until data loads
+  - On desktop, `RefreshIndicator` still works via mouse scroll overscroll — no need for a separate implementation
+  - Do not change any provider logic, just invalidate + re-read
+  - If a screen uses `CustomScrollView`, use `RefreshIndicator` wrapping it (not `SliverRefreshControl`)
+  - Get `orgId` from `ref.watch(currentOrgProvider)` (already used throughout the app)
+
+- **When done:** Mark `done`, move to Completed Tasks table
+
+---
+
 ## Completed Tasks
 
 | Task ID | Description | Completed | Notes |
